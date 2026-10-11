@@ -604,7 +604,8 @@ import { loadVideoGeneratePortLimits } from '../features/graph/model/videoGenera
 import { composeImageGridCell } from '../features/graph/model/composeImageGridCell'
 import {
   resolveSemanticTimelineViewTarget,
-  semanticTimelineTextFromRunState
+  semanticTimelineTextFromRunState,
+  type SemanticTimelineViewTarget
 } from '../features/graph/model/semanticTimelineView'
 import {
   ASSET_TYPE_ICONS,
@@ -2614,22 +2615,42 @@ function resolveSemanticOutText(
 function resolveSemanticTimelinePayload(
   node: GraphNode,
   runState: GraphNodeRunState | null | undefined
-): { id: string; json?: string } | null {
+): SemanticTimelineViewTarget | null {
   return resolveSemanticTimelineViewTarget(node, runState)
+}
+
+/**
+ * 语义时间线是**透传**节点：自己没时间线时，回落到上游（通常就是语义分析节点）。
+ *
+ * 以前这里没有回落，而是编了个假 id `stl.node.<nodeId>` 去开编辑器 —— 那个目录根本不存在，
+ * 于是用户看到 `timeline not found`（实测踩到）。上游分析节点会把 `semanticTimelineId`
+ * 存在自己的参数里，所以不需要上游的运行态也能解析。
+ */
+function resolveUpstreamTimelinePayload(): SemanticTimelineViewTarget | null {
+  const hostId = props.hostId?.trim()
+  if (!hostId) return null
+  for (const edge of graphEditorHosts.listIncomingEdges(hostId, props.node.id)) {
+    const source = graphEditorHosts.getNode(hostId, edge.sourceNodeId)
+    if (!source) continue
+    const target = resolveSemanticTimelineViewTarget(source, null)
+    if (target) return target
+  }
+  return null
 }
 
 async function openSemanticTimelineDive(
   title: string,
-  payload: { id: string; json?: string } | null,
+  payload: SemanticTimelineViewTarget | null,
   fallbackId?: string
 ): Promise<boolean> {
-  const timelineId = payload?.id || fallbackId
-  if (!timelineId) return false
+  // 允许空 id：真没有时间线时也把编辑器打开，由视图给出「还没有时间线」的提示
+  const timelineId = payload?.id || fallbackId || ''
   return diveView(
     {
       viewId: 'semantic.timeline',
       timelineId,
-      timelineJson: payload?.json
+      timelineJson: payload?.json,
+      sourceRelativePath: payload?.sourceRelativePath
     },
     title
   )
@@ -2769,12 +2790,10 @@ function onPreviewDblClick(): void {
     }
     // Semantic Timeline：时间线编辑器 dive；其余工具 dive 文本结果（勿记事本 / 空 texts 弹窗）
     if (isSemanticTimelineEditorNode(props.node)) {
-      const payload = resolveSemanticTimelinePayload(props.node, props.runState)
-      const ok = await openSemanticTimelineDive(
-        title,
-        payload,
-        payload ? undefined : `stl.node.${props.node.id}`
-      )
+      const payload =
+        resolveSemanticTimelinePayload(props.node, props.runState) ??
+        resolveUpstreamTimelinePayload()
+      const ok = await openSemanticTimelineDive(title, payload)
       if (!ok && payload?.json) await openSemanticResultTextDive(title, payload.json)
       return
     }

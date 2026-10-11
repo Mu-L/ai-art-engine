@@ -14,6 +14,8 @@ export interface SemanticTimelineViewTarget {
   id: string
   /** 内联 JSON：输出尚未落盘时直接渲染，省一次读盘 */
   json?: string
+  /** 原视频工程相对路径（dive 里显示视频用；透传节点从上游拿） */
+  sourceRelativePath?: string
 }
 
 /** 运行输出里的时间线文本（兼容旧的纯文本值与新的结构化值） */
@@ -48,17 +50,24 @@ function parseTimelineJson(raw: unknown): SemanticTimelineViewTarget | null {
  * 1. 本次运行的输出（含未落盘的最新 JSON）；
  * 2. 节点参数里的 `timelineJson`（手写/上游撑起来的时间线）；
  * 3. 只留 `semanticTimelineId`（重开工程后运行输出已不在内存里，交给 dive 按 id 读盘）。
+ *
+ * 三种来源都顺带带上 `sourceRelativePath`（分析节点会存原视频路径）—— 语义时间线是透传节点，
+ * 从上游解析时也靠这条把视频带进 dive。
  */
 export function resolveSemanticTimelineViewTarget(
   node: Pick<GraphNode, 'params'>,
   runState: GraphNodeRunState | null | undefined
 ): SemanticTimelineViewTarget | null {
+  const sourceRelativePath = String(node.params?.sourceRelativePath ?? '').trim() || undefined
+  const withSource = (
+    target: SemanticTimelineViewTarget | null
+  ): SemanticTimelineViewTarget | null => (target ? { ...target, sourceRelativePath } : null)
   const fromRun = parseTimelineJson(semanticTimelineTextFromRunState(runState))
-  if (fromRun) return fromRun
+  if (fromRun) return withSource(fromRun)
   const fromParams = parseTimelineJson(node.params?.timelineJson)
-  if (fromParams) return fromParams
+  if (fromParams) return withSource(fromParams)
   const id = String(node.params?.semanticTimelineId ?? '').trim()
-  return id.startsWith('stl.') ? { id } : null
+  return id.startsWith('stl.') ? { id, sourceRelativePath } : null
 }
 
 /**

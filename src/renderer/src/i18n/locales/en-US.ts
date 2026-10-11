@@ -4917,6 +4917,10 @@ export default {
       evidence: 'Evidence',
       selectHint: 'Select an event, beat, entity or production clip to see its evidence',
       noEntities: 'No entities',
+      noTimelineHint: 'This node has no timeline yet',
+      noTimelineHintSub:
+        'Connect a Semantic analyze node to its Timeline input, or paste timeline JSON in the inspector.',
+      timelineFileMissing: 'Timeline file not found',
       pixelEditable: 'Pixel-editable',
       yes: 'Yes',
       no: 'No',

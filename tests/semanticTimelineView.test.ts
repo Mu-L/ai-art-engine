@@ -321,6 +321,29 @@ describe('semanticTimelineView', () => {
     expect(appearanceSeekSeconds([{ range: { start: Number.NaN, end: 1 } }], 0)).toBeUndefined()
   })
 
+  /**
+   * 「有没有时间线」的三种来源都要带上原视频路径 —— 语义时间线是透传节点，
+   * 从上游解析时也靠这条把视频带进 dive。
+   */
+  it('resolveSemanticTimelineViewTarget 顺带带上 sourceRelativePath', () => {
+    const video = 'Assets/logo/QQ20261010-204459.mp4'
+    expect(
+      resolveSemanticTimelineViewTarget(
+        { params: { semanticTimelineId: 'stl.8f3a895ecf', sourceRelativePath: video } },
+        null
+      )
+    ).toEqual({ id: 'stl.8f3a895ecf', sourceRelativePath: video })
+    const doc = JSON.stringify({ id: 'stl.aaa', source: { assetId: 'a' } })
+    expect(
+      resolveSemanticTimelineViewTarget(
+        { params: { timelineJson: doc, sourceRelativePath: video } },
+        null
+      )
+    ).toEqual({ id: 'stl.aaa', json: doc, sourceRelativePath: video })
+    // 既没 id 也没 JSON → null（调用方据此回落上游 / 给提示，而不是编假 id）
+    expect(resolveSemanticTimelineViewTarget({ params: { timelineJson: '' } }, null)).toBeNull()
+  })
+
   it('非法 / 不相干的 JSON 不算时间线目标', () => {
     expect(
       resolveSemanticTimelineViewTarget({ params: { timelineJson: '{oops' } }, null)

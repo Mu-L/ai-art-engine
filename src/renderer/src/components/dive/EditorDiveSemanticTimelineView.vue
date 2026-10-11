@@ -7,6 +7,9 @@ import { computed, onMounted, ref, watch } from 'vue'
 import type { SemanticTimeline } from '@shared/semanticTimeline'
 import SemanticTimelineEditor from '../SemanticTimelineEditor.vue'
 import SemanticCompareView from '../SemanticCompareView.vue'
+import { useStudioI18n } from '../../composables/useStudioI18n'
+
+const { t } = useStudioI18n()
 
 const props = defineProps<{
   frameKey: string
@@ -19,6 +22,9 @@ const props = defineProps<{
 
 const timeline = ref<SemanticTimeline | null>(null)
 const error = ref('')
+/** 「还没有时间线」不是错误：透传节点未接上游时就是这种状态，给提示而不是报错 */
+const hint = ref('')
+const missingPath = ref('')
 const originalUrl = ref('')
 const resultUrl = ref('')
 
@@ -38,6 +44,8 @@ function parseInline(raw: string | undefined): SemanticTimeline | null {
 
 async function load(): Promise<void> {
   error.value = ''
+  hint.value = ''
+  missingPath.value = ''
   timeline.value = null
   originalUrl.value = ''
   resultUrl.value = ''
@@ -48,17 +56,27 @@ async function load(): Promise<void> {
   } else {
     const id = timelineId.value
     if (!id) {
-      error.value = 'missing timelineId'
+      /**
+       * 没有 id 也没有内联 JSON：**不是错误**。
+       * 语义时间线是透传节点，未接上游（或上游还没产出）时就是这个状态 ——
+       * 以前这种情况会被塞一个假 id 进来，然后报 `timeline not found`，让人以为是坏了。
+       */
+      hint.value = t('graph.semanticTimeline.noTimelineHint')
       return
     }
+    const rel = `Semantic/${id}/timeline.json`
     try {
-      const text = await window.studio.readProjectFile(`Semantic/${id}/timeline.json`)
+      const text = await window.studio.readProjectFile(rel)
       if (text?.trim()) {
         timeline.value = JSON.parse(text) as SemanticTimeline
       }
-      if (!timeline.value) error.value = 'timeline not found'
+      if (!timeline.value) {
+        error.value = t('graph.semanticTimeline.timelineFileMissing')
+        missingPath.value = rel
+      }
     } catch (e) {
       error.value = e instanceof Error ? e.message : String(e)
+      missingPath.value = rel
     }
   }
 
@@ -92,7 +110,14 @@ watch(
     本视图不自带返回条、也不做全屏浮层。
   -->
   <div class="dive-semantic dive-view">
-    <p v-if="error" class="err">{{ error }}</p>
+    <p v-if="error" class="err">
+      {{ error }}
+      <span v-if="missingPath" class="path">{{ missingPath }}</span>
+    </p>
+    <div v-else-if="hint" class="hint">
+      <p>{{ hint }}</p>
+      <p class="hint-sub">{{ t('graph.semanticTimeline.noTimelineHintSub') }}</p>
+    </div>
     <SemanticTimelineEditor v-if="timeline" :timeline="timeline" />
     <SemanticCompareView
       v-if="originalUrl && resultUrl"
@@ -117,6 +142,23 @@ watch(
 .err {
   color: #f88;
   font-size: 13px;
+}
+.err .path {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-family: Consolas, monospace;
+  font-size: 12px;
+}
+/* 「还没有时间线」是提示，不是错误：用常规色 + 说明下一步怎么做 */
+.hint {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.hint-sub {
+  color: var(--text-muted);
+  font-size: 12px;
 }
 .compare {
   min-height: 220px;

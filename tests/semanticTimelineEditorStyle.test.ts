@@ -211,6 +211,24 @@ describe('SemanticTimelineEditor 轨道尺寸与字号', () => {
    * 用户点上去没任何反应（其它三类都正常）。
    */
   /**
+   * 实体片段以前是**空块**（只有 tooltip），四类片段里唯一没字的 —— 现在把名字写上去。
+   */
+  it('实体片段上写着实体名（与节拍/事件/制作一致，长名截断）', () => {
+    // 片段里渲染 ent.name，且不再是自闭合空块
+    expect(source).toContain('{{ ent.name }}')
+    expect(source).toMatch(/@click="selectEntity\(ent, i\)"\s*\n\s*>\s*\n\s*\{\{ ent\.name \}\}/)
+    // 空块的写法必须消失（自闭合且紧跟 title）
+    expect(source).not.toMatch(
+      /\$\{ap\.range\.start\.toFixed\(2\)\}–\$\{ap\.range\.end\.toFixed\(2\)\}s`"\s*\n\s*@click="selectEntity\(ent, i\)"\s*\n\s*\/>/
+    )
+    // 截断能力来自 .stl-block 的通用样式
+    const block = cssBlock('.stl-block')
+    expect(block).toMatch(/overflow:\s*hidden/)
+    expect(block).toMatch(/text-overflow:\s*ellipsis/)
+    expect(block).toMatch(/white-space:\s*nowrap/)
+  })
+
+  /**
    * 高亮必须按**片段**算：一个实体有多次出现、一个意图横跨多条轨道，
    * 只比 id 会「点一个片段整行 / 整条轨道全亮」（用户反馈）。
    */

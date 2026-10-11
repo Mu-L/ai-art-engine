@@ -578,7 +578,9 @@ function beatLabel(type: string): string {
               :style="{ left: left(ap.range.start), width: width(ap.range.start, ap.range.end) }"
               :title="`${ent.name} · ${ap.range.start.toFixed(2)}–${ap.range.end.toFixed(2)}s`"
               @click="selectEntity(ent, i)"
-            />
+            >
+              {{ ent.name }}
+            </button>
           </div>
         </div>
         <div v-if="!entities.length" class="stl-empty">

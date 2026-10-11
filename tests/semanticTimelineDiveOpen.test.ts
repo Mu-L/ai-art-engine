@@ -24,6 +24,10 @@ const inspector = readFileSync(
   join(process.cwd(), 'src/renderer/src/components/SemanticTimelineInspector.vue'),
   'utf8'
 )
+const executor = readFileSync(
+  join(process.cwd(), 'src/shared/graph/execute/semanticTimeline.ts'),
+  'utf8'
+)
 
 describe('语义时间线 dive 的打开路径', () => {
   it('不再编造 stl.node.<nodeId> 假 id', () => {
@@ -106,6 +110,25 @@ describe('语义时间线 dive 的打开路径', () => {
     expect(inspector).toMatch(/function onPickEventLabel[\s\S]{0,200}?persistTrigger\(\)/)
     // 列不出候选时要说清楚原因
     expect(inspector).toContain('eventLabelNoOptions')
+  })
+
+  it('事件标签支持多选（勾选写回逗号分隔，参数仍是单值字段）', () => {
+    // 勾选状态从输入框解析（手填的 id/type 也保留）
+    expect(inspector).toContain('const pickedEventLabels = computed(() => parseEventLabels(')
+    // 复选框列表
+    expect(inspector).toContain('class="event-label-item"')
+    expect(inspector).toContain('type="checkbox"')
+    expect(inspector).toContain(':checked="pickedEventLabels.includes(label)"')
+    expect(inspector).toContain('@change="toggleEventLabel(label)"')
+    // 切换后重写成逗号分隔并落盘
+    expect(inspector).toMatch(
+      /function toggleEventLabel[\s\S]{0,320}?eventLabel\.value = next\.join\(', '\)[\s\S]{0,80}?persistTrigger\(\)/
+    )
+    // 引擎侧：多值解析函数被真正使用（行为由 tests/semanticTriggerNode.test.ts 覆盖）
+    expect(executor).toContain('parseEventLabels(ctx.node.params?.eventLabel)')
+    expect(executor).toContain('labels.includes(e.label)')
+    expect(executor).toContain('labels.includes(intent.trigger)')
+    expect(executor).toContain('eventLabels: labels')
   })
 
   it('两套文案都有这五个 key', () => {

@@ -5444,10 +5444,12 @@ export default {
         eventLabel: 'Event label filter',
         eventLabelPlaceholder: 'e.g. offer / CTA; empty = all',
         eventLabelPick: 'Pick an event label…',
+        eventLabelPickMany: 'Multi-select: tick the event labels to include',
+        eventLabelPicked: '{count} selected (comma separated)',
         eventLabelNoOptions:
           'No timeline loaded yet, so no candidates — copy a label from the upstream analyze node or the event track.',
         eventLabelHint:
-          'Keep only director commands whose trigger/intent matches this string (event id or type also works)',
+          'Multi-select works; you can also type event ids or types, separated by commas (empty = all)',
         sourceRelativePath: 'Source video relative path',
         sourceRelativePathPlaceholder: 'e.g. Assets/foo.mp4',
         sourceRelativePathHint: 'Leave empty to resolve from the timeline source asset',

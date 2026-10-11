@@ -165,6 +165,23 @@
         <span v-else class="field-hint">
           {{ t('graph.inspector.semantic.eventLabelNoOptions') }}
         </span>
+        <!-- 多选：勾选写回成逗号分隔（参数仍是单值字段，零迁移） -->
+        <div v-if="eventLabelOptions.length" class="event-label-list">
+          <span class="field-label">{{ t('graph.inspector.semantic.eventLabelPickMany') }}</span>
+          <label v-for="label in eventLabelOptions" :key="`pick-${label}`" class="event-label-item">
+            <input
+              type="checkbox"
+              :checked="pickedEventLabels.includes(label)"
+              @change="toggleEventLabel(label)"
+            />
+            <span>{{ label }}</span>
+          </label>
+          <span class="field-hint">
+            {{
+              t('graph.inspector.semantic.eventLabelPicked', { count: pickedEventLabels.length })
+            }}
+          </span>
+        </div>
         <span class="field-hint">{{ t('graph.inspector.semantic.eventLabelHint') }}</span>
       </label>
     </section>
@@ -333,6 +350,7 @@ import { useEditorKernel } from '../editor/kernel'
 import { graphEditorHosts } from '../features/graph/model/graphEditorHosts'
 import { graphRunHosts } from '../features/graph/model/graphRunHosts'
 import { eventLabelChoices } from '../features/graph/model/semanticTimelineView'
+import { parseEventLabels } from '@shared/semanticTimeline'
 
 const SEMANTIC_TYPE_IDS = new Set([
   'semantic.analyze',
@@ -564,6 +582,17 @@ function onPickEventLabel(event: Event): void {
   persistTrigger()
 }
 
+/** 已勾选的事件标签（输入框里的值按逗号拆开；手填的 id/type 也在这里保留） */
+const pickedEventLabels = computed(() => parseEventLabels(eventLabel.value))
+
+/** 勾选/取消一个标签：重写成逗号分隔并落盘（多值走同一字段，向后兼容） */
+function toggleEventLabel(label: string): void {
+  const picked = pickedEventLabels.value
+  const next = picked.includes(label) ? picked.filter((l) => l !== label) : [...picked, label]
+  eventLabel.value = next.join(', ')
+  persistTrigger()
+}
+
 function persistCompile(): void {
   patch({ sourceRelativePath: sourceRelativePath.value.trim() })
 }
@@ -762,6 +791,33 @@ const timelineSummary = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.event-label-select {
+  margin-top: 4px;
+}
+/* 事件标签多选：紧凑两列，长标签省略 */
+.event-label-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px 10px;
+  margin-top: 6px;
+}
+.event-label-list > .field-label,
+.event-label-list > .field-hint {
+  grid-column: 1 / -1;
+}
+.event-label-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  min-width: 0;
+}
+.event-label-item > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .field-label {

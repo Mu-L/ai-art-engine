@@ -21,6 +21,7 @@ import {
   intentId,
   normalizeSemanticEdits,
   parseEventDrafts,
+  parseEventLabels,
   parseJsonArray,
   parseShotDescriptions,
   planInvalidation,
@@ -667,34 +668,48 @@ export async function executeSemanticTriggerNode(
 ): Promise<Record<string, GraphValue>> {
   const timeline = readTimeline(ctx)
   if (!timeline) return outText('{}')
-  const eventLabel = String(ctx.node.params?.eventLabel || '').trim()
+  /**
+   * 事件标签支持**逗号分隔多值**（`eventLabel` 保持单值字段名以便向后兼容）：
+   * 串一条片子时常常要一次抓多个事件（促销类 + 收尾号召）。
+   */
+  const labels = parseEventLabels(ctx.node.params?.eventLabel)
   const rulePacks = collectRulePacks(await loadPacks(ctx), rulePackIds(ctx))
   const all = compileDirectorCommands(timeline, { rulePacks })
-  if (!eventLabel) {
+  if (labels.length === 0) {
     return outText(
-      JSON.stringify({ eventLabel: '', events: timeline.events, commands: all }, null, 2)
+      JSON.stringify(
+        { eventLabel: '', eventLabels: [], events: timeline.events, commands: all },
+        null,
+        2
+      )
     )
   }
   const events = timeline.events.filter(
-    (e) => e.label === eventLabel || e.id === eventLabel || e.type === eventLabel
+    (e) => labels.includes(e.label) || labels.includes(e.id) || labels.includes(e.type)
   )
   const eventIds = new Set(events.map((e) => e.id))
   const commands = all.filter((c) => {
     const intent = c.sourceIntentId
       ? timeline.intents.find((i) => i.id === c.sourceIntentId)
       : undefined
-    if (intent && (eventIds.has(intent.trigger) || intent.trigger === eventLabel)) return true
+    if (intent && (eventIds.has(intent.trigger) || labels.includes(intent.trigger))) return true
     return events.some((e) => c.start < e.timeRange.end && c.end > e.timeRange.start)
   })
   if (events.length === 0) {
     say(
       ctx,
-      `时间线里没有「${eventLabel}」事件`, // cjk-ok
-      `No "${eventLabel}" event in the timeline`,
+      `时间线里没有「${labels.join('、')}」事件`, // cjk-ok
+      `No "${labels.join(', ')}" event in the timeline`,
       'warn'
     )
   }
-  return outText(JSON.stringify({ eventLabel, events, commands }, null, 2))
+  return outText(
+    JSON.stringify(
+      { eventLabel: labels.join(', '), eventLabels: labels, events, commands },
+      null,
+      2
+    )
+  )
 }
 
 // ─── semantic.repair / semantic.variant ──────────────────────────────────────────

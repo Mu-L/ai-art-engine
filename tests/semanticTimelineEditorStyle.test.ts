@@ -199,7 +199,9 @@ describe('SemanticTimelineEditor 轨道尺寸与字号', () => {
     expect(source.match(/seekVideo\(/g)?.length ?? 0).toBeGreaterThanOrEqual(4) // 定义 1 + 调用 3
     expect(source).toContain('seekVideo(b.timeRange.start)')
     expect(source).toContain('seekVideo(e.timeRange.start)')
-    expect(source).toContain('seekVideo(first.range.start)')
+    // 实体跳的是**被点那次出现**（`appearanceSeekSeconds` 的结果），不是写死的第一次出现
+    expect(source).toContain('appearanceSeekSeconds(e.appearances, index)')
+    expect(source).toContain('seekVideo(start)')
     // 夹取走纯函数（越界会被浏览器拒绝）
     expect(source).toContain('clampSeekSeconds(sec, duration)')
   })
@@ -208,9 +210,25 @@ describe('SemanticTimelineEditor 轨道尺寸与字号', () => {
    * **每类片段都必须能点** —— 制作层（机位/声音/字幕/特效）以前漏了 `@click`，
    * 用户点上去没任何反应（其它三类都正常）。
    */
+  /**
+   * 实体片段点击必须带**被点的那次出现**的索引 ——
+   * 以前 `@click="selectEntity(ent)"` 无论点哪个片段都跳 appearances[0]（真 bug）。
+   */
+  it('实体片段点击传出现索引（不是永远跳第一次出现）', () => {
+    expect(source).toContain('@click="selectEntity(ent, i)"')
+    expect(source).not.toContain('@click="selectEntity(ent)"')
+    expect(source).toContain('appearanceSeekSeconds(')
+    expect(source).toContain('function selectEntity(e: Entity, index?: number)')
+    // 片段要有可读 tooltip（名称 + 该次出现的时间），而不是裸 id
+    expect(source).toContain('${ent.name} · ${ap.range.start.toFixed(2)}')
+  })
+
+  /**
+   * 四类片段都绑了点击（节拍 / 实体 / 事件 / 制作）。
+   */
   it('四类片段都绑了点击（节拍 / 实体 / 事件 / 制作）', () => {
     expect(source).toContain('@click="selectBeat(b)"')
-    expect(source).toContain('@click="selectEntity(ent)"')
+    expect(source).toContain('@click="selectEntity(ent, i)"')
     expect(source).toContain('@click="selectEvent(ev)"')
     expect(source).toContain('@click="selectIntent(intent)"')
     // 制作层片段也要能选中高亮（与其它三类一致）

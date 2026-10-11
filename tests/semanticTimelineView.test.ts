@@ -3,6 +3,7 @@ import {
   SIDE_PANE_MAX_WIDTH,
   SIDE_PANE_MIN_WIDTH,
   TRACKS_PANE_MIN_WIDTH,
+  appearanceSeekSeconds,
   clampSeekSeconds,
   clampSidePaneWidth,
   entityKindKey,
@@ -293,6 +294,31 @@ describe('semanticTimelineView', () => {
     expect(entityKindKey('PRODUCT')).toBe('entityKindProduct')
     expect(entityKindKey('face')).toBeUndefined()
     expect(entityKindKey('')).toBeUndefined()
+  })
+
+  /**
+   * 实体片段点击：一个实体多镜头出现时会渲染多个片段，点哪个就要跳哪个。
+   * （真 bug：以前无论点哪个都跳 appearances[0]。）
+   */
+  it('appearanceSeekSeconds：按被点的出现跳转，越界/缺失回退第一次，无出现给 undefined', () => {
+    const appearances = [
+      { range: { start: 3.5, end: 7.2 } },
+      { range: { start: 17.12, end: 23.75 } },
+      { range: { start: 29.6, end: 31.92 } }
+    ]
+    // 点第 1 / 2 / 3 个片段 → 各自的时间（这正是以前错的地方）
+    expect(appearanceSeekSeconds(appearances, 0)).toBe(3.5)
+    expect(appearanceSeekSeconds(appearances, 1)).toBe(17.12)
+    expect(appearanceSeekSeconds(appearances, 2)).toBe(29.6)
+    // 没传索引 / 越界 / 非整数 → 回退第一次出现
+    expect(appearanceSeekSeconds(appearances)).toBe(3.5)
+    expect(appearanceSeekSeconds(appearances, 9)).toBe(3.5)
+    expect(appearanceSeekSeconds(appearances, -1)).toBe(3.5)
+    expect(appearanceSeekSeconds(appearances, 1.5)).toBe(3.5)
+    // 没有出现记录 / 时间非法 → undefined（调用方不动播放条，别跳 0）
+    expect(appearanceSeekSeconds([], 0)).toBeUndefined()
+    expect(appearanceSeekSeconds(undefined, 0)).toBeUndefined()
+    expect(appearanceSeekSeconds([{ range: { start: Number.NaN, end: 1 } }], 0)).toBeUndefined()
   })
 
   it('非法 / 不相干的 JSON 不算时间线目标', () => {

@@ -261,6 +261,27 @@ export function entityKindKey(kind: string): string | undefined {
   }
 }
 
+/**
+ * 点实体片段时该跳到哪一秒。
+ *
+ * 一个实体可能在**多个镜头**出现（每次出现渲染一个片段），点击必须跳到**被点的那个片段**，
+ * 而不是永远跳第一次出现（真 bug：一个实体三处出现，点哪都回到第一处）。
+ * `index` 越界 / 缺失时退回第一次出现；没有出现记录时返回 undefined（调用方不动播放条）。
+ */
+export function appearanceSeekSeconds(
+  appearances: ReadonlyArray<{ range: { start: number; end: number } }> | undefined,
+  index?: number
+): number | undefined {
+  const list = appearances ?? []
+  if (list.length === 0) return undefined
+  const picked =
+    index != null && Number.isInteger(index) && index >= 0 && index < list.length
+      ? list[index]
+      : list[0]
+  const start = picked?.range?.start
+  return Number.isFinite(start) ? (start as number) : undefined
+}
+
 /** 右栏（视频+证据）可调宽度的边界 */
 export const SIDE_PANE_MIN_WIDTH = 320
 export const SIDE_PANE_MAX_WIDTH = 900

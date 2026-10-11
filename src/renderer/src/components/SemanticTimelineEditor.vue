@@ -22,6 +22,7 @@ import {
 } from '../features/graph/model/semanticTimelineZoom'
 import { useStudioI18n } from '../composables/useStudioI18n'
 import {
+  appearanceSeekSeconds,
   clampSeekSeconds,
   clampSidePaneWidth,
   entityKindKey,
@@ -255,14 +256,19 @@ function selectEvent(e: SemanticEvent): void {
   emit('seek', e.timeRange.start)
   seekVideo(e.timeRange.start)
 }
-function selectEntity(e: Entity): void {
+/**
+ * 点实体片段：跳到**被点的这次出现**。
+ *
+ * 以前无论点哪个片段都跳 `appearances[0]` —— 一个实体在多镜头出现时会渲染多个片段，
+ * 点第二个 / 第三个却回到第一处（用户反馈的「点击事件处理不正确」）。
+ */
+function selectEntity(e: Entity, index?: number): void {
   selectedId.value = e.id
   emit('selectEntity', e.id)
-  const first = e.appearances[0]
-  if (first) {
-    emit('seek', first.range.start)
-    seekVideo(first.range.start)
-  }
+  const start = appearanceSeekSeconds(e.appearances, index)
+  if (start == null) return
+  emit('seek', start)
+  seekVideo(start)
 }
 
 /**
@@ -548,7 +554,8 @@ function beatLabel(type: string): string {
               class="stl-block entity"
               :class="{ selected: selectedId === ent.id, soft: !ent.pixelEditable }"
               :style="{ left: left(ap.range.start), width: width(ap.range.start, ap.range.end) }"
-              @click="selectEntity(ent)"
+              :title="`${ent.name} · ${ap.range.start.toFixed(2)}–${ap.range.end.toFixed(2)}s`"
+              @click="selectEntity(ent, i)"
             />
           </div>
         </div>

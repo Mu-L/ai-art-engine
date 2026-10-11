@@ -20,6 +20,10 @@ const view = readFileSync(
   join(process.cwd(), 'src/renderer/src/components/dive/EditorDiveSemanticTimelineView.vue'),
   'utf8'
 )
+const inspector = readFileSync(
+  join(process.cwd(), 'src/renderer/src/components/SemanticTimelineInspector.vue'),
+  'utf8'
+)
 
 describe('语义时间线 dive 的打开路径', () => {
   it('不再编造 stl.node.<nodeId> 假 id', () => {
@@ -75,6 +79,33 @@ describe('语义时间线 dive 的打开路径', () => {
     // 提示文案走 i18n
     expect(card).toContain("t('graph.semanticTimeline.noResultHint')")
     expect(card).toContain("t('graph.semanticTimeline.noResultHintSub')")
+  })
+
+  it('触发节点的「事件标签过滤」要真的列出候选（下拉 + 上游解析）', () => {
+    /**
+     * 以前候选项只来自"本节点 JSON / 本节点输出"，而触发节点的输出是
+     * `{eventLabel, events, commands}`（不是时间线文档）→ 下拉永远是空的。
+     */
+    expect(inspector).toContain('eventLabelChoices(timelineDoc.value)')
+    expect(inspector).toContain('const upstreamTimelineJson = ref(')
+    expect(inspector).toContain('graphEditorHosts.listIncomingEdges(host, current.id)')
+    // 三种上游来源：上游运行输出 → 上游 timelineJson → 上游 semanticTimelineId 读盘
+    expect(inspector).toContain('graphRunHosts.get(host)?.runStates?.[source.id]?.outputs?.out')
+    expect(inspector).toContain('Semantic/${stlId}/timeline.json')
+    // 三者都要参与 timelineDoc 解析
+    expect(inspector).toContain(
+      '[timelineJson.value, runOutText.value, upstreamTimelineJson.value]'
+    )
+    // 显式下拉（原生 datalist 没箭头，很多人不知道有候选）：class 与 v-if 都要断言，
+    // 否则把 v-if 改成 false（等于没有下拉）也照样通过
+    expect(inspector).toMatch(/<select[\s\S]{0,160}?v-if="eventLabelOptions\.length"/)
+    expect(inspector).toContain('class="event-label-select"')
+    expect(inspector).toContain('@change="onPickEventLabel"')
+    expect(inspector).toContain('function onPickEventLabel(')
+    // 选完要落盘
+    expect(inspector).toMatch(/function onPickEventLabel[\s\S]{0,200}?persistTrigger\(\)/)
+    // 列不出候选时要说清楚原因
+    expect(inspector).toContain('eventLabelNoOptions')
   })
 
   it('两套文案都有这五个 key', () => {

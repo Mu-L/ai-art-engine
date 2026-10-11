@@ -150,6 +150,21 @@
         <datalist id="semantic-event-labels">
           <option v-for="label in eventLabelOptions" :key="label" :value="label" />
         </datalist>
+        <!-- 原生 datalist 没有下拉箭头，很多人不知道有候选项；这里再给一个显式下拉 -->
+        <select
+          v-if="eventLabelOptions.length"
+          class="event-label-select"
+          :value="eventLabel"
+          @change="onPickEventLabel"
+        >
+          <option value="">{{ t('graph.inspector.semantic.eventLabelPick') }}</option>
+          <option v-for="label in eventLabelOptions" :key="`sel-${label}`" :value="label">
+            {{ label }}
+          </option>
+        </select>
+        <span v-else class="field-hint">
+          {{ t('graph.inspector.semantic.eventLabelNoOptions') }}
+        </span>
         <span class="field-hint">{{ t('graph.inspector.semantic.eventLabelHint') }}</span>
       </label>
     </section>
@@ -317,6 +332,7 @@ import { useGraphNodeRun } from '../composables/useGraphNodeRun'
 import { useEditorKernel } from '../editor/kernel'
 import { graphEditorHosts } from '../features/graph/model/graphEditorHosts'
 import { graphRunHosts } from '../features/graph/model/graphRunHosts'
+import { eventLabelChoices } from '../features/graph/model/semanticTimelineView'
 
 const SEMANTIC_TYPE_IDS = new Set([
   'semantic.analyze',
@@ -542,6 +558,12 @@ function persistTrigger(): void {
   patch({ eventLabel: eventLabel.value.trim() })
 }
 
+/** 下拉选一个事件标签 → 填进输入框并落盘（输入框仍可手填 id / type） */
+function onPickEventLabel(event: Event): void {
+  eventLabel.value = (event.target as HTMLSelectElement).value
+  persistTrigger()
+}
+
 function persistCompile(): void {
   patch({ sourceRelativePath: sourceRelativePath.value.trim() })
 }
@@ -599,9 +621,61 @@ const runOutText = computed(() => {
   return out && out.kind === 'text' ? out.text : ''
 })
 
-/** 上游时间线（本节点 in 端口最近一次收到的值，或本节点自己的输出） */
+/**
+ * 上游时间线文档（原始 JSON 文本）。
+ *
+ * 触发节点自己的输出**不是时间线文档**（`{eventLabel, events, commands}`），
+ * 所以「事件标签过滤」的候选项必须能往上游找；否则下拉永远是空的 —— 用户看到的就是
+ * 一个没法选的输入框。这里按入边逐个尝试：上游的运行输出 → 上游的 `timelineJson`
+ * → 上游的 `semanticTimelineId` 读盘。
+ */
+const upstreamTimelineJson = ref('')
+
+async function loadUpstreamTimeline(): Promise<void> {
+  upstreamTimelineJson.value = ''
+  const host = hostId.value
+  const current = node.value
+  if (!host || !current) return
+  for (const edge of graphEditorHosts.listIncomingEdges(host, current.id)) {
+    const source = graphEditorHosts.getNode(host, edge.sourceNodeId)
+    if (!source) continue
+    const out = graphRunHosts.get(host)?.runStates?.[source.id]?.outputs?.out
+    const outText = out && (out.kind === 'text' || out.kind === 'semanticTimeline') ? out.text : ''
+    if (outText.trim()) {
+      upstreamTimelineJson.value = outText
+      return
+    }
+    const own = String(source.params?.timelineJson ?? '').trim()
+    if (own) {
+      upstreamTimelineJson.value = own
+      return
+    }
+    const stlId = String(source.params?.semanticTimelineId ?? '').trim()
+    if (stlId.startsWith('stl.')) {
+      try {
+        const text = await window.studio.readProjectFile(`Semantic/${stlId}/timeline.json`)
+        if (text?.trim()) {
+          upstreamTimelineJson.value = text
+          return
+        }
+      } catch {
+        /* 读不到就继续找其它入边 */
+      }
+    }
+  }
+}
+
+watch(
+  [() => node.value?.id, hostId, () => node.value?.params?.timelineJson],
+  () => {
+    void loadUpstreamTimeline()
+  },
+  { immediate: true }
+)
+
+/** 时间线文档：本节点 JSON / 本节点输出 / 上游（三者取第一个能解析成文档的） */
 const timelineDoc = computed((): SemanticTimeline | null => {
-  for (const raw of [timelineJson.value, runOutText.value]) {
+  for (const raw of [timelineJson.value, runOutText.value, upstreamTimelineJson.value]) {
     const text = raw.trim()
     if (!text) continue
     try {
@@ -614,9 +688,7 @@ const timelineDoc = computed((): SemanticTimeline | null => {
   return null
 })
 
-const eventLabelOptions = computed(() => [
-  ...new Set((timelineDoc.value?.events ?? []).map((e) => e.label))
-])
+const eventLabelOptions = computed(() => eventLabelChoices(timelineDoc.value))
 
 const timelineSummary = computed(() => {
   const doc = timelineDoc.value

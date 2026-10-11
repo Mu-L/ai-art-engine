@@ -5443,7 +5443,11 @@ export default {
         jsonPlaceholder: '[] or a full evidence-array JSON',
         eventLabel: 'Event label filter',
         eventLabelPlaceholder: 'e.g. offer / CTA; empty = all',
-        eventLabelHint: 'Keep only director commands whose trigger/intent matches this string',
+        eventLabelPick: 'Pick an event label…',
+        eventLabelNoOptions:
+          'No timeline loaded yet, so no candidates — copy a label from the upstream analyze node or the event track.',
+        eventLabelHint:
+          'Keep only director commands whose trigger/intent matches this string (event id or type also works)',
         sourceRelativePath: 'Source video relative path',
         sourceRelativePathPlaceholder: 'e.g. Assets/foo.mp4',
         sourceRelativePathHint: 'Leave empty to resolve from the timeline source asset',

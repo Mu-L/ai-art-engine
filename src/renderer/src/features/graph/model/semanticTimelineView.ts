@@ -291,6 +291,24 @@ export function appearanceSeekSeconds(
   return Number.isFinite(start) ? (start as number) : undefined
 }
 
+/**
+ * 触发节点「事件标签过滤」的可选项：时间线里所有事件标签（去重、保持原顺序）。
+ *
+ * 触发节点的**运行输出不是时间线文档**（是 `{eventLabel, events, commands}`），
+ * 所以候选项不能只看"本节点的 JSON / 本节点输出" —— 得能往上游找，
+ * 否则这个下拉永远是空的（实测踩到）。
+ */
+export function eventLabelChoices(
+  doc: { events?: ReadonlyArray<{ label?: unknown }> } | null | undefined
+): string[] {
+  const out: string[] = []
+  for (const event of doc?.events ?? []) {
+    const label = typeof event?.label === 'string' ? event.label.trim() : ''
+    if (label && !out.includes(label)) out.push(label)
+  }
+  return out
+}
+
 /** 右栏（视频+证据）可调宽度的边界 */
 export const SIDE_PANE_MIN_WIDTH = 320
 export const SIDE_PANE_MAX_WIDTH = 900

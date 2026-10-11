@@ -853,9 +853,11 @@ function beatLabel(type: string): string {
 .stl-source-video {
   display: block;
   width: 100%;
-  /* 固定 720 高：竖屏（9:16）画面正好铺满高度；横屏按 contain 上下留黑边。
-     证据在视频下方，由面板自己滚 —— 不再粘顶（720 高的视频粘住会把证据全挡住） */
+  /* 目标高度 720：竖屏（9:16）画面正好铺满高度；横屏按 contain 上下留黑边。
+     但要**适配窗口**：矮窗口下用 max-height 收住（给下面的证据留 ~170px），
+     否则右栏内容比窗口高、整块溢出，左侧轨道区会被撑出一大片空白。 */
   height: 720px;
+  max-height: calc(100% - 170px);
   object-fit: contain;
   background: #000;
 }

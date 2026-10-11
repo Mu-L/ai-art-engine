@@ -168,6 +168,8 @@ describe('SemanticTimelineEditor 轨道尺寸与字号', () => {
     const video = cssBlock('.stl-source-video')
     expect(video).toMatch(/width:\s*100%/)
     expect(pxOf('.stl-source-video', 'height')).toBe(720)
+    // 矮窗口要收住（否则右栏内容比窗口高 → 整块溢出、左侧轨道区被撑出空白）
+    expect(video).toMatch(/max-height:\s*calc\(100% - \d+px\)/)
     expect(video).toMatch(/object-fit:\s*contain/)
   })
 

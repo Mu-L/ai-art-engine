@@ -251,6 +251,24 @@ const viewBindings = computed(() => {
   flex-direction: column;
 }
 
+/**
+ * 视图包装层：以前**完全没样式**，高度链断在这一层 ——
+ * `.editor-dive-child` 是 flex 列，但这层是 auto 高度的普通块，
+ * 里面的 `.dive-view { height: 100% }` 于是解析成 auto（内容高度），
+ * 结果 dive 只长内容那么高，窗口下部分留一片宿主画布背景（实测踩到）。
+ * 让它做「透明」的 flex 透传：高度继下去、子项自己撑满。
+ */
+.editor-dive-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.editor-dive-view > :deep(*) {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .editor-dive-child > :deep(.asset-editor),
 .editor-dive-child > :deep(.beat-asset-editor),
 .editor-dive-child > :deep(.world-element-editor),

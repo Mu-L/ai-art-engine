@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   clampSeekSeconds,
   resolveSemanticTimelineViewTarget,
+  resolveTriggerRange,
   semanticTimelineSummaryText,
   semanticTimelineTextFromRunState
 } from '../src/renderer/src/features/graph/model/semanticTimelineView'
@@ -120,6 +121,32 @@ describe('semanticTimelineView', () => {
     expect(clampSeekSeconds(12.5, Number.NaN)).toBe(12.5)
     expect(clampSeekSeconds(12.5, 0)).toBe(12.5)
     expect(clampSeekSeconds(12.5, undefined)).toBe(12.5)
+  })
+
+  /**
+   * 制作层片段（机位/声音/字幕/特效）的落点由 trigger 决定 —— 这条以前内联在模板里，
+   * 且**机位/声音的片段根本没绑 @click**（点了没反应）。现在抽成纯函数并补用例。
+   */
+  it('resolveTriggerRange：按 id 或 label 命中事件，找不到给 0–1 兜底', () => {
+    const events = [
+      { id: 'ev-1', label: 'cta', timeRange: { start: 2, end: 5 } },
+      { id: 'ev-2', label: 'hook', timeRange: { start: 0, end: 2 } }
+    ]
+    expect(resolveTriggerRange(events, 'ev-1')).toEqual({ start: 2, end: 5 })
+    // 按 label 触发也要认（生成侧两种都出现过）
+    expect(resolveTriggerRange(events, 'hook')).toEqual({ start: 0, end: 2 })
+    expect(resolveTriggerRange(events, '  ev-1  ')).toEqual({ start: 2, end: 5 })
+    // 找不到 / 空 trigger → 兜底 0–1，不能是负宽或 NaN（否则片段会整块消失）
+    expect(resolveTriggerRange(events, 'nope')).toEqual({ start: 0, end: 1 })
+    expect(resolveTriggerRange(events, '')).toEqual({ start: 0, end: 1 })
+    // 事件时间为非法值时也要给出可用区间
+    expect(
+      resolveTriggerRange([{ id: 'x', timeRange: { start: Number.NaN, end: Number.NaN } }], 'x')
+    ).toEqual({ start: 0, end: 1 })
+    expect(resolveTriggerRange([{ id: 'y', timeRange: { start: 3, end: 3 } }], 'y')).toEqual({
+      start: 3,
+      end: 4
+    })
   })
 
   it('非法 / 不相干的 JSON 不算时间线目标', () => {

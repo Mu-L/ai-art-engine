@@ -69,6 +69,28 @@ interface TimelineCounts {
 }
 
 /**
+ * 制作层片段（机位/声音/字幕/特效）的落点：由 `intent.trigger` 指向的事件决定。
+ *
+ * 事件可能按 **id** 或 **label** 触发（生成侧两种都出现过）；都找不到时给 0–1 的兜底，
+ * 免得片段宽度变成负值 / NaN 而整块消失。
+ */
+export function resolveTriggerRange(
+  events: ReadonlyArray<{
+    id: string
+    label?: string
+    timeRange: { start: number; end: number }
+  }>,
+  trigger: string
+): { start: number; end: number } {
+  const key = trigger?.trim() ?? ''
+  const hit = key ? events.find((e) => e.id === key || e.label === key) : undefined
+  if (!hit) return { start: 0, end: 1 }
+  const start = Number.isFinite(hit.timeRange.start) ? hit.timeRange.start : 0
+  const end = Number.isFinite(hit.timeRange.end) ? hit.timeRange.end : start + 1
+  return { start, end: end > start ? end : start + 1 }
+}
+
+/**
  * 点选 clip 时播放条要跳到的时刻：负数归零，并夹在视频时长内。
  *
  * 不夹的话 `video.currentTime = 超出时长` 会被浏览器拒绝或产生 NaN ——

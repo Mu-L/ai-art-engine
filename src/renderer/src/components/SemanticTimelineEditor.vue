@@ -21,7 +21,7 @@ import {
   timeAtPointer
 } from '../features/graph/model/semanticTimelineZoom'
 import { useStudioI18n } from '../composables/useStudioI18n'
-import { clampSeekSeconds } from '../features/graph/model/semanticTimelineView'
+import { clampSeekSeconds, resolveTriggerRange } from '../features/graph/model/semanticTimelineView'
 import { useProjectStore } from '../stores/project'
 
 const { t, te } = useStudioI18n()
@@ -38,6 +38,7 @@ const emit = defineEmits<{
   selectEvent: [id: string]
   selectBeat: [id: string]
   selectEntity: [id: string]
+  selectIntent: [id: string]
 }>()
 
 const scrollRef = ref<HTMLElement | null>(null)
@@ -128,6 +129,8 @@ const selectedEvidence = computed(() => {
   if (beat) return { kind: 'beat' as const, item: beat }
   const ent = entities.value.find((e) => e.id === id)
   if (ent) return { kind: 'entity' as const, item: ent }
+  const intent = intents.value.find((i) => i.id === id)
+  if (intent) return { kind: 'intent' as const, item: intent }
   return null
 })
 
@@ -217,14 +220,22 @@ const productionTracks = computed(() => [
   { id: 'vfx', label: t('graph.semanticTimeline.trackVfx') }
 ])
 
-function eventOf(trigger: string): SemanticEvent | undefined {
-  return events.value.find((e) => e.id === trigger || e.label === trigger)
+/** 制作层片段的落点：由 intent.trigger 指向的事件决定（找不到给 0–1 兜底） */
+function intentRange(intent: DirectorIntent): { start: number; end: number } {
+  return resolveTriggerRange(events.value, intent.trigger)
 }
-function eventStart(trigger: string): number {
-  return eventOf(trigger)?.timeRange.start ?? 0
-}
-function eventEnd(trigger: string): number {
-  return eventOf(trigger)?.timeRange.end ?? 1
+
+/**
+ * 点选制作层片段（机位/声音/字幕/特效）——**与其它片段一致**：选中高亮 + 播放条跳到对应时刻。
+ *
+ * 这里以前**根本没有 @click**（节拍/实体/事件都有），所以机位、声音上的片段点了没反应。
+ */
+function selectIntent(intent: DirectorIntent): void {
+  selectedId.value = intent.id
+  emit('selectIntent', intent.id)
+  const start = intentRange(intent).start
+  emit('seek', start)
+  seekVideo(start)
 }
 
 /**
@@ -356,11 +367,13 @@ function beatLabel(type: string): string {
               :key="intent.id + track.id"
               type="button"
               class="stl-block intent"
+              :class="{ selected: selectedId === intent.id }"
               :style="{
-                left: left(eventStart(intent.trigger)),
-                width: width(eventStart(intent.trigger), eventEnd(intent.trigger))
+                left: left(intentRange(intent).start),
+                width: width(intentRange(intent).start, intentRange(intent).end)
               }"
               :title="intent.reason"
+              @click="selectIntent(intent)"
             >
               {{ intent.techniques.find((t) => t.track === track.id)?.action }}
             </button>
@@ -421,6 +434,24 @@ function beatLabel(type: string): string {
         </p>
         <p>{{ selectedEvidence.item.description }}</p>
         <p class="muted">events: {{ selectedEvidence.item.events.join(', ') || '—' }}</p>
+      </template>
+      <template v-else-if="selectedEvidence.kind === 'intent'">
+        <p>
+          <strong>{{ selectedEvidence.item.goal }}</strong>
+        </p>
+        <p class="muted">{{ t('graph.semanticTimeline.techniques') }}</p>
+        <p>
+          <span v-for="tech in selectedEvidence.item.techniques" :key="tech.track + tech.action">
+            {{ tech.track }} · {{ tech.action }}<br />
+          </span>
+        </p>
+        <p v-if="selectedEvidence.item.reason" class="muted">
+          {{ t('graph.semanticTimeline.reason') }}: {{ selectedEvidence.item.reason }}
+        </p>
+        <p class="muted">
+          {{ intentRange(selectedEvidence.item).start.toFixed(2) }}s –
+          {{ intentRange(selectedEvidence.item).end.toFixed(2) }}s
+        </p>
       </template>
       <template v-else>
         <p>

@@ -199,6 +199,22 @@ describe('SemanticTimelineEditor 轨道尺寸与字号', () => {
   })
 
   /**
+   * **每类片段都必须能点** —— 制作层（机位/声音/字幕/特效）以前漏了 `@click`，
+   * 用户点上去没任何反应（其它三类都正常）。
+   */
+  it('四类片段都绑了点击（节拍 / 实体 / 事件 / 制作）', () => {
+    expect(source).toContain('@click="selectBeat(b)"')
+    expect(source).toContain('@click="selectEntity(ent)"')
+    expect(source).toContain('@click="selectEvent(ev)"')
+    expect(source).toContain('@click="selectIntent(intent)"')
+    // 制作层片段也要能选中高亮（与其它三类一致）
+    expect(source).toContain(':class="{ selected: selectedId === intent.id }"')
+    // 点选制作层片段同样要移动播放条
+    expect(source).toContain('function selectIntent(')
+    expect(source).toContain('seekVideo(start)')
+  })
+
+  /**
    * 横向滚动条必须落在**可见区底部**。
    *
    * 实测踩过：编辑器不给高度、随内容长高，于是 `.stl-scroll` 的横向滚动条被推到内容最底部 ——

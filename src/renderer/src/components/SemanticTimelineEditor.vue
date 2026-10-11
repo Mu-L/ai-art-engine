@@ -21,7 +21,12 @@ import {
   timeAtPointer
 } from '../features/graph/model/semanticTimelineZoom'
 import { useStudioI18n } from '../composables/useStudioI18n'
-import { clampSeekSeconds, resolveTriggerRange } from '../features/graph/model/semanticTimelineView'
+import {
+  clampSeekSeconds,
+  clampSidePaneWidth,
+  resolveTriggerRange,
+  sidePaneWidthFromPointer
+} from '../features/graph/model/semanticTimelineView'
 import { useProjectStore } from '../stores/project'
 
 const { t, te } = useStudioI18n()
@@ -226,6 +231,75 @@ function intentRange(intent: DirectorIntent): { start: number; end: number } {
 }
 
 /**
+ * 两栏拖动手柄。
+ *
+ * 与 AssetBrowser 的分栏同一套写法（mousedown + window 监听 + 松手持久化）：
+ * 宽度默认由 CSS `clamp(420px, 44%, 720px)` 决定，一旦拖动就改成固定像素（内联 flex-basis）。
+ */
+const editorRef = ref<HTMLElement | null>(null)
+const SIDE_WIDTH_STORAGE_KEY = 'aiartengine.semanticTimeline.sidePaneWidth'
+const sidePaneWidth = ref<number | null>(readStoredSideWidth())
+const isSplitterDragging = ref(false)
+
+function readStoredSideWidth(): number | null {
+  try {
+    const raw = window.localStorage.getItem(SIDE_WIDTH_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = Number(raw)
+    return Number.isFinite(parsed) ? clampSidePaneWidth(parsed) : null
+  } catch {
+    return null
+  }
+}
+
+function persistSideWidth(): void {
+  try {
+    if (sidePaneWidth.value == null) return
+    window.localStorage.setItem(SIDE_WIDTH_STORAGE_KEY, String(Math.round(sidePaneWidth.value)))
+  } catch {
+    /* 存储不可用时忽略：宽度仍对本次会话生效 */
+  }
+}
+
+function currentSideWidth(rect: DOMRect | undefined): number {
+  return (
+    sidePaneWidth.value ??
+    clampSidePaneWidth(Math.round((rect?.width ?? 0) * 0.44) || 420, rect?.width)
+  )
+}
+
+function onSplitterDown(e: MouseEvent): void {
+  if (e.button !== 0) return
+  isSplitterDragging.value = true
+  const onMove = (ev: MouseEvent): void => {
+    const rect = editorRef.value?.getBoundingClientRect()
+    sidePaneWidth.value = sidePaneWidthFromPointer({
+      clientX: ev.clientX,
+      editorRight: rect?.right ?? ev.clientX,
+      editorWidth: rect?.width
+    })
+  }
+  const onUp = (): void => {
+    isSplitterDragging.value = false
+    persistSideWidth()
+    window.removeEventListener('mousemove', onMove)
+    window.removeEventListener('mouseup', onUp)
+  }
+  window.addEventListener('mousemove', onMove)
+  window.addEventListener('mouseup', onUp)
+}
+
+/** 键盘也能调（手柄可聚焦）：每次 24px，方向与拖动一致（左箭头＝右栏更宽） */
+function onSplitterKeydown(e: KeyboardEvent): void {
+  const direction = e.key === 'ArrowLeft' ? 1 : e.key === 'ArrowRight' ? -1 : 0
+  if (direction === 0) return
+  e.preventDefault()
+  const rect = editorRef.value?.getBoundingClientRect()
+  sidePaneWidth.value = clampSidePaneWidth(currentSideWidth(rect) + direction * 24, rect?.width)
+  persistSideWidth()
+}
+
+/**
  * 点选制作层片段（机位/声音/字幕/特效）——**与其它片段一致**：选中高亮 + 播放条跳到对应时刻。
  *
  * 这里以前**根本没有 @click**（节拍/实体/事件都有），所以机位、声音上的片段点了没反应。
@@ -251,7 +325,7 @@ function beatLabel(type: string): string {
 </script>
 
 <template>
-  <div class="stl-editor">
+  <div ref="editorRef" class="stl-editor">
     <div ref="scrollRef" class="stl-scroll" @wheel="onWheel">
       <div class="stl-zoombar">
         <button
@@ -402,7 +476,23 @@ function beatLabel(type: string): string {
       </section>
     </div>
 
-    <aside class="stl-inspector">
+    <!-- 两栏拖动手柄：拖动改右栏宽（键盘 ←/→ 也可） -->
+    <div
+      class="stl-splitter"
+      :class="{ dragging: isSplitterDragging }"
+      role="separator"
+      aria-orientation="vertical"
+      tabindex="0"
+      :title="t('graph.semanticTimeline.resizePanes')"
+      :aria-label="t('graph.semanticTimeline.resizePanes')"
+      @mousedown.prevent="onSplitterDown"
+      @keydown="onSplitterKeydown"
+    />
+
+    <aside
+      class="stl-inspector"
+      :style="sidePaneWidth != null ? { flexBasis: sidePaneWidth + 'px' } : undefined"
+    >
       <div v-if="sourceVideoUrl" class="stl-source">
         <video
           ref="videoRef"
@@ -702,6 +792,39 @@ function beatLabel(type: string): string {
   font-size: 12px;
   color: var(--text-muted);
   padding: 6px 10px 6px 12px;
+}
+/* 两栏拖动手柄：视觉上是一条竖线，命中区 8px（够好抓） */
+.stl-splitter {
+  flex: 0 0 8px;
+  align-self: stretch;
+  position: relative;
+  cursor: col-resize;
+  background: transparent;
+}
+.stl-splitter::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--border);
+  transition: background 0.12s ease;
+}
+.stl-splitter:hover::before,
+.stl-splitter:focus-visible::before,
+.stl-splitter.dragging::before {
+  background: var(--accent);
+  width: 3px;
+  left: 2.5px;
+}
+.stl-splitter:focus-visible {
+  outline: none;
+}
+.stl-splitter.dragging {
+  /* 拖动中别让文本被选中 */
+  user-select: none;
 }
 .stl-inspector {
   /* 右侧栏（视频 + 证据）。两栏布局：左轨道 flex:1、右栏按比例固定 ——

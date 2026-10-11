@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
+  SIDE_PANE_MAX_WIDTH,
+  SIDE_PANE_MIN_WIDTH,
+  TRACKS_PANE_MIN_WIDTH,
   clampSeekSeconds,
+  clampSidePaneWidth,
   resolveSemanticTimelineViewTarget,
   resolveTriggerRange,
   semanticTimelineSummaryText,
-  semanticTimelineTextFromRunState
+  semanticTimelineTextFromRunState,
+  sidePaneWidthFromPointer
 } from '../src/renderer/src/features/graph/model/semanticTimelineView'
 import { semanticTimelineValue } from '../src/shared/graph/execute/semanticTimelineValue'
 import { SEMANTIC_TIMELINE_SCHEMA } from '../src/shared/semanticTimeline'
@@ -147,6 +152,40 @@ describe('semanticTimelineView', () => {
       start: 3,
       end: 4
     })
+  })
+
+  /**
+   * 两栏拖动：宽度收敛必须在纯函数里定死（拖过头把轨道挤没、或把右栏拖成 0 都是这里防的）。
+   */
+  it('clampSidePaneWidth / sidePaneWidthFromPointer：边界与「左栏不被挤没」', () => {
+    expect(clampSidePaneWidth(500)).toBe(500)
+    // 绝对边界
+    expect(clampSidePaneWidth(100)).toBe(SIDE_PANE_MIN_WIDTH)
+    expect(clampSidePaneWidth(5000)).toBe(SIDE_PANE_MAX_WIDTH)
+    expect(clampSidePaneWidth(Number.NaN)).toBe(SIDE_PANE_MIN_WIDTH)
+    // 已知编辑器总宽时，保证左栏至少 TRACKS_PANE_MIN_WIDTH（这里上限 900 先生效）
+    expect(clampSidePaneWidth(900, 1200)).toBe(SIDE_PANE_MAX_WIDTH)
+    expect(clampSidePaneWidth(500, 1200)).toBe(500)
+    // 总宽不够时由「左栏保护」收紧：1000 - 280 = 720
+    expect(clampSidePaneWidth(880, 1000)).toBe(1000 - TRACKS_PANE_MIN_WIDTH)
+    // 窗口很窄（总宽 < 两个最小值之和）：右栏不小于 min 优先，不能出现负宽
+    expect(clampSidePaneWidth(500, 400)).toBe(SIDE_PANE_MIN_WIDTH)
+    expect(clampSidePaneWidth(500, 100)).toBe(SIDE_PANE_MIN_WIDTH)
+  })
+
+  it('拖动换算：右栏贴着编辑器右边缘，拖到哪算到哪', () => {
+    // 编辑器右边缘 1000，鼠标在 600 → 右栏 400
+    expect(sidePaneWidthFromPointer({ clientX: 600, editorRight: 1000, editorWidth: 1600 })).toBe(
+      400
+    )
+    // 拖到最右（超出右边缘）→ 收敛到最小值，而不是 0 或负数
+    expect(sidePaneWidthFromPointer({ clientX: 1400, editorRight: 1000, editorWidth: 1600 })).toBe(
+      SIDE_PANE_MIN_WIDTH
+    )
+    // 拖到很左 → 收敛到最大值
+    expect(sidePaneWidthFromPointer({ clientX: 0, editorRight: 1600, editorWidth: 1600 })).toBe(
+      SIDE_PANE_MAX_WIDTH
+    )
   })
 
   it('非法 / 不相干的 JSON 不算时间线目标', () => {

@@ -4896,6 +4896,7 @@ export default {
       trackEvents: 'Events',
       techniques: 'Techniques',
       reason: 'Reason',
+      resizePanes: 'Drag to resize panes (or ← →)',
       evidence: 'Evidence',
       selectHint: 'Select an event, beat, entity or production clip to see its evidence',
       noEntities: 'No entities',

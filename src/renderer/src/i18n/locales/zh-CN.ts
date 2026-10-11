@@ -4787,6 +4787,7 @@ export default {
       trackEvents: '事件',
       techniques: '手法',
       reason: '理由',
+      resizePanes: '拖动调整左右宽度（← → 也可）',
       evidence: '证据',
       selectHint: '点选事件、节拍、实体或制作片段查看其证据',
       noEntities: '暂无实体',

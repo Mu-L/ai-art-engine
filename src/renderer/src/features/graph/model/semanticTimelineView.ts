@@ -61,6 +61,37 @@ export function resolveSemanticTimelineViewTarget(
   return id.startsWith('stl.') ? { id } : null
 }
 
+/** 右栏（视频+证据）可调宽度的边界 */
+export const SIDE_PANE_MIN_WIDTH = 320
+export const SIDE_PANE_MAX_WIDTH = 900
+/** 左栏（轨道）的最小可见宽度：拖到头时保留这么多，别把轨道挤没 */
+export const TRACKS_PANE_MIN_WIDTH = 280
+
+/**
+ * 右栏宽度收敛：先夹绝对边界，若已知编辑器总宽再保证左栏不被挤没。
+ *
+ * 小窗口下 `editorWidth` 可能小于两个最小值之和 —— 此时以「右栏不小于 min」优先
+ * （左栏有 `min-width: 0` + 自身横向滚动，挤窄仍可用）。
+ */
+export function clampSidePaneWidth(desired: number, editorWidth?: number): number {
+  const value = Number.isFinite(desired) ? desired : SIDE_PANE_MIN_WIDTH
+  const lowerBounded = Math.max(SIDE_PANE_MIN_WIDTH, value)
+  const withTracks = Number.isFinite(editorWidth)
+    ? (editorWidth as number) - TRACKS_PANE_MIN_WIDTH
+    : SIDE_PANE_MAX_WIDTH
+  const upper = Math.max(SIDE_PANE_MIN_WIDTH, Math.min(SIDE_PANE_MAX_WIDTH, withTracks))
+  return Math.min(lowerBounded, upper)
+}
+
+/** 拖动时的宽度：右栏贴着编辑器右边缘算，等价于把手柄拖到鼠标处 */
+export function sidePaneWidthFromPointer(input: {
+  clientX: number
+  editorRight: number
+  editorWidth?: number
+}): number {
+  return clampSidePaneWidth(input.editorRight - input.clientX, input.editorWidth)
+}
+
 interface TimelineCounts {
   shots?: number
   utterances?: number

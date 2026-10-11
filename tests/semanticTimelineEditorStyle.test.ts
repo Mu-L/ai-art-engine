@@ -215,6 +215,41 @@ describe('SemanticTimelineEditor 轨道尺寸与字号', () => {
   })
 
   /**
+   * 两栏之间的拖动手柄：与 AssetBrowser 分栏同一套写法（mousedown + window 监听 + 松手持久化）。
+   */
+  it('两栏之间有可拖动手柄（鼠标 + 键盘 + 持久化 + 命中区够宽）', () => {
+    expect(source).toContain('class="stl-splitter"')
+    expect(source).toContain('@mousedown.prevent="onSplitterDown"')
+    // 键盘也能调（手柄可聚焦）
+    expect(source).toContain('@keydown="onSplitterKeydown"')
+    expect(source).toContain('tabindex="0"')
+    expect(source).toContain('role="separator"')
+    // 松手持久化 + window 监听要摘干净
+    expect(source).toContain("window.addEventListener('mousemove', onMove)")
+    expect(source).toContain("window.removeEventListener('mousemove', onMove)")
+    /**
+     * 必须断言「松手这条路径」里就跟着持久化 —— 只查 `persistSideWidth()` 是否出现在文件里
+     * 会被键盘分支里的同名调用蒙过去（实测：把 onUp 里的调用删掉，断言照过）。
+     */
+    expect(source).toMatch(/isSplitterDragging\.value = false\s*\n\s*persistSideWidth\(\)/)
+    // 键盘那条路径同样要持久化（两个入口行为一致）
+    expect(source).toMatch(
+      /clampSidePaneWidth\(currentSideWidth\(rect\) \+ direction \* 24[\s\S]{0,160}?persistSideWidth\(\)/
+    )
+    expect(source).toContain('localStorage')
+    // 宽度走抽出来的纯函数，别在组件里手算边界
+    expect(source).toContain('sidePaneWidthFromPointer({')
+    expect(source).toContain('clampSidePaneWidth(')
+    // 拖动后右栏用内联 flex-basis 生效（沿用 CSS clamp 作为默认）
+    expect(source).toContain("flexBasis: sidePaneWidth + 'px'")
+    // 手柄命中区不能是 0 宽；光标要是拖动形
+    const splitter = cssBlock('.stl-splitter')
+    expect(splitter).toMatch(/cursor:\s*col-resize/)
+    expect(splitter).toMatch(/flex:\s*0 0 \d+px/)
+    expect(Number(/flex:\s*0 0 (\d+)px/.exec(splitter)?.[1] ?? 0)).toBeGreaterThanOrEqual(6)
+  })
+
+  /**
    * 横向滚动条必须落在**可见区底部**。
    *
    * 实测踩过：编辑器不给高度、随内容长高，于是 `.stl-scroll` 的横向滚动条被推到内容最底部 ——

@@ -53,8 +53,38 @@ describe('语义时间线 dive 的打开路径', () => {
     expect(view).toContain('noTimelineHintSub')
   })
 
-  it('两套文案都有这三个 key', () => {
-    for (const key of ['noTimelineHint', 'noTimelineHintSub', 'timelineFileMissing']) {
+  it('没有运行结果时双击也要有反应（不能静默什么都不做）', () => {
+    // 工具节点（触发 / 编译 / 修复 / 变体）与分析的兜底都改成"开文本 dive 说明情况"
+    expect(card).toContain('function semanticNoResultHint(')
+    /**
+     * 两个分支必须**分别**断言，而且不能用子串关系糊弄过去：
+     * 工具分支那行是 `const ok = await …`，分析分支那行以 `await …` 起头 ——
+     * 所以分析分支要**行首锚定**（`m` 模式）才真正独立（这点实测踩了两次）。
+     */
+    expect(card).toMatch(
+      /^\s+await openSemanticResultTextDive\(title, raw \|\| semanticNoResultHint\(\)\)/m
+    )
+    expect(card).toContain(
+      'const ok = await openSemanticResultTextDive(title, raw || semanticNoResultHint())'
+    )
+    // 旧的静默分支必须消失：`if (raw) { ... }` 之后直接 return
+    expect(card).not.toMatch(/if \(raw\) \{\s*\n\s*const ok = await openSemanticResultTextDive/)
+    expect(card).not.toMatch(
+      /const raw = resolveSemanticOutText\(props\.node, props\.runState\)\s*\n\s*if \(raw\) await/
+    )
+    // 提示文案走 i18n
+    expect(card).toContain("t('graph.semanticTimeline.noResultHint')")
+    expect(card).toContain("t('graph.semanticTimeline.noResultHintSub')")
+  })
+
+  it('两套文案都有这五个 key', () => {
+    for (const key of [
+      'noTimelineHint',
+      'noTimelineHintSub',
+      'timelineFileMissing',
+      'noResultHint',
+      'noResultHintSub'
+    ]) {
       for (const [name, locale] of [
         ['zh-CN', zhCN],
         ['en-US', enUS]

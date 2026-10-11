@@ -4812,6 +4812,8 @@ export default {
       noTimelineHintSub:
         '把「语义分析」节点接到它的 Timeline 输入口，或在右侧属性面板里粘贴时间线 JSON。',
       timelineFileMissing: '时间线文件不存在',
+      noResultHint: '这个节点还没有运行结果',
+      noResultHintSub: '先执行它（节点上的「执行当前节点」），再双击查看结果。',
       pixelEditable: '可像素级替换',
       yes: '是',
       no: '否',

@@ -2671,6 +2671,16 @@ async function openSemanticResultTextDive(title: string, text: string): Promise<
   )
 }
 
+/**
+ * 还没有运行结果时的文本。
+ *
+ * 以前这种情况下双击是**静默 return**（触发 / 编译 / 修复 / 变体都没跑过时点上去毫无反应，
+ * 用户分不清"没结果"和"坏了"）。现在统一开一个文本 dive 说明情况。
+ */
+function semanticNoResultHint(): string {
+  return `${t('graph.semanticTimeline.noResultHint')}\n\n${t('graph.semanticTimeline.noResultHintSub')}`
+}
+
 function onPreviewDblClick(): void {
   if (isMissingLinkedAsset.value) return
   void (async () => {
@@ -2805,15 +2815,14 @@ function onPreviewDblClick(): void {
         return
       }
       const raw = resolveSemanticOutText(props.node, props.runState)
-      if (raw) await openSemanticResultTextDive(title, raw)
+      // 没有结果也要有反应（说明情况），不能静默什么都不做
+      await openSemanticResultTextDive(title, raw || semanticNoResultHint())
       return
     }
     if (isSemanticTimelineToolNode(props.node)) {
       const raw = resolveSemanticOutText(props.node, props.runState)
-      if (raw) {
-        const ok = await openSemanticResultTextDive(title, raw)
-        if (!ok) emit('textsOpen', props.node.id)
-      }
+      const ok = await openSemanticResultTextDive(title, raw || semanticNoResultHint())
+      if (!ok) emit('textsOpen', props.node.id)
       return
     }
     if (isPortraitTextureEditorNode(props.node)) {

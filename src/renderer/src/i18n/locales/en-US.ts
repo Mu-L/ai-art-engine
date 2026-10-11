@@ -4921,6 +4921,9 @@ export default {
       noTimelineHintSub:
         'Connect a Semantic analyze node to its Timeline input, or paste timeline JSON in the inspector.',
       timelineFileMissing: 'Timeline file not found',
+      noResultHint: 'This node has no result yet',
+      noResultHintSub:
+        'Run it first ("Execute current node"), then double-click to view the result.',
       pixelEditable: 'Pixel-editable',
       yes: 'Yes',
       no: 'No',

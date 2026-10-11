@@ -256,6 +256,24 @@ describe('SemanticTimelineEditor 轨道尺寸与字号', () => {
   })
 
   /**
+   * 缩放条的符号按钮（− / + / ⟲）必须**正中心**：
+   * 按钮默认带浏览器内边距、且不是 flex，不重置就会偏（实测踩到）。
+   */
+  it('缩放符号按钮居中（flex 居中 + padding 归零 + 定尺寸）', () => {
+    const btn = cssBlock('.stl-zoombar-btn')
+    expect(btn, '缺少按钮样式').toBeTruthy()
+    expect(btn).toMatch(/display:\s*inline-flex/)
+    expect(btn).toMatch(/align-items:\s*center/)
+    expect(btn).toMatch(/justify-content:\s*center/)
+    expect(btn).toMatch(/padding:\s*0/)
+    expect(btn).toMatch(/line-height:\s*1/)
+    // 定尺寸的圆（宽高一致），否则 flex 居中也会看着偏
+    const w = pxOf('.stl-zoombar-btn', 'width')
+    const h = pxOf('.stl-zoombar-btn', 'height')
+    expect(w).toBe(h)
+  })
+
+  /**
    * 横向滚动条必须落在**可见区底部**。
    *
    * 实测踩过：编辑器不给高度、随内容长高，于是 `.stl-scroll` 的横向滚动条被推到内容最底部 ——

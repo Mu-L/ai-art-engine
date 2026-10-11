@@ -612,13 +612,20 @@ function beatLabel(type: string): string {
   color: var(--text-muted);
 }
 .stl-zoombar-btn {
+  /* 符号要**正中心**：按钮默认带浏览器内边距（1px 6px）且不是 flex，
+     不重置就会让 − / + / ⟲ 偏（实测踩到） */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  flex: 0 0 auto;
   width: 20px;
   height: 20px;
   border: none;
   border-radius: 50%;
   background: var(--bg-elevated);
   color: var(--text);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1;
   cursor: pointer;
 }

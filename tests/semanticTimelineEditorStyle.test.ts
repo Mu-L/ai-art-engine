@@ -211,6 +211,30 @@ describe('SemanticTimelineEditor 轨道尺寸与字号', () => {
    * 用户点上去没任何反应（其它三类都正常）。
    */
   /**
+   * 高亮必须按**片段**算：一个实体有多次出现、一个意图横跨多条轨道，
+   * 只比 id 会「点一个片段整行 / 整条轨道全亮」（用户反馈）。
+   */
+  it('高亮按片段键（实体带出现序号、制作层带轨道），不是只比 id', () => {
+    expect(source).toContain('const selectedClip = ref<string | null>(null)')
+    expect(source).toContain('function clipKey(id: string, suffix?: string | number)')
+    // 四类片段都按片段键判断
+    expect(source).toContain(':class="{ selected: selectedClip === clipKey(ent.id, i)')
+    expect(source).toContain(':class="{ selected: selectedClip === clipKey(intent.id, track.id) }"')
+    expect(source).toContain(':class="{ selected: selectedClip === clipKey(b.id) }"')
+    expect(source).toContain(':class="{ selected: selectedClip === clipKey(ev.id) }"')
+    // 旧写法（只比 id）必须消失
+    expect(source).not.toContain('selected: selectedId === ent.id')
+    expect(source).not.toContain('selected: selectedId === intent.id')
+    expect(source).not.toContain('selected: selectedId === b.id')
+    expect(source).not.toContain('selected: selectedId === ev.id')
+    // 制作层点击要带轨道
+    expect(source).toContain('@click="selectIntent(intent, track.id)"')
+    // 选中状态也要写进片段键（否则点完不高亮）
+    expect(source).toContain('selectedClip.value = clipKey(e.id, index ?? 0)')
+    expect(source).toContain('selectedClip.value = clipKey(intent.id, track)')
+  })
+
+  /**
    * 实体片段点击必须带**被点的那次出现**的索引 ——
    * 以前 `@click="selectEntity(ent)"` 无论点哪个片段都跳 appearances[0]（真 bug）。
    */
@@ -230,9 +254,9 @@ describe('SemanticTimelineEditor 轨道尺寸与字号', () => {
     expect(source).toContain('@click="selectBeat(b)"')
     expect(source).toContain('@click="selectEntity(ent, i)"')
     expect(source).toContain('@click="selectEvent(ev)"')
-    expect(source).toContain('@click="selectIntent(intent)"')
+    expect(source).toContain('@click="selectIntent(intent, track.id)"')
     // 制作层片段也要能选中高亮（与其它三类一致）
-    expect(source).toContain(':class="{ selected: selectedId === intent.id }"')
+    expect(source).toContain('selected: selectedClip === clipKey(intent.id, track.id)')
     // 点选制作层片段同样要移动播放条
     expect(source).toContain('function selectIntent(')
     expect(source).toContain('seekVideo(start)')

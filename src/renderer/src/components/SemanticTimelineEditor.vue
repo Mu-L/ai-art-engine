@@ -124,7 +124,18 @@ function resetZoom(): void {
   })
 }
 
+/**
+ * 证据面板按**实体/节拍/事件/意图**选中（`selectedId`）；
+ * 高亮要按**片段**算 —— 一个实体有多次出现、一个意图会横跨多条制作轨道，
+ * 只比 id 会「点一个片段，整行 / 整条轨道全亮」（用户反馈）。
+ */
 const selectedId = ref<string | null>(null)
+const selectedClip = ref<string | null>(null)
+
+/** 片段键：实体＝id#出现序号，制作层＝id#轨道，其余＝id */
+function clipKey(id: string, suffix?: string | number): string {
+  return suffix == null ? id : `${id}#${suffix}`
+}
 
 const beats = computed(() => props.timeline.beats)
 const entities = computed(() => props.timeline.entities)
@@ -246,24 +257,28 @@ function seekToRef(ref: ResolvedEvidenceRef): void {
 
 function selectBeat(b: StoryBeat): void {
   selectedId.value = b.id
+  selectedClip.value = clipKey(b.id)
   emit('selectBeat', b.id)
   emit('seek', b.timeRange.start)
   seekVideo(b.timeRange.start)
 }
 function selectEvent(e: SemanticEvent): void {
   selectedId.value = e.id
+  selectedClip.value = clipKey(e.id)
   emit('selectEvent', e.id)
   emit('seek', e.timeRange.start)
   seekVideo(e.timeRange.start)
 }
 /**
- * 点实体片段：跳到**被点的这次出现**。
+ * 点实体片段：跳到**被点的这次出现**，且只高亮**这一个片段**。
  *
- * 以前无论点哪个片段都跳 `appearances[0]` —— 一个实体在多镜头出现时会渲染多个片段，
- * 点第二个 / 第三个却回到第一处（用户反馈的「点击事件处理不正确」）。
+ * 旧版两个问题都在这里：
+ * 1. 无论点哪个片段都跳 `appearances[0]`（点第二个 / 第三个却回到第一处）；
+ * 2. 高亮只比实体 id，而该 id 被同一实体的所有出现共用 → 点一个，整行都亮。
  */
 function selectEntity(e: Entity, index?: number): void {
   selectedId.value = e.id
+  selectedClip.value = clipKey(e.id, index ?? 0)
   emit('selectEntity', e.id)
   const start = appearanceSeekSeconds(e.appearances, index)
   if (start == null) return
@@ -438,8 +453,15 @@ function onSplitterKeydown(e: KeyboardEvent): void {
  *
  * 这里以前**根本没有 @click**（节拍/实体/事件都有），所以机位、声音上的片段点了没反应。
  */
-function selectIntent(intent: DirectorIntent): void {
+/**
+ * 点选制作层片段（机位/声音/字幕/特效）——**与其它片段一致**：选中高亮 + 播放条跳到对应时刻。
+ *
+ * 这里以前**根本没有 @click**（节拍/实体/事件都有），所以机位、声音上的片段点了没反应。
+ * 同一意图会横跨多条轨道，高亮要带上轨道（否则点机位那条，声音那条也一起亮）。
+ */
+function selectIntent(intent: DirectorIntent, track?: string): void {
   selectedId.value = intent.id
+  selectedClip.value = clipKey(intent.id, track)
   emit('selectIntent', intent.id)
   const start = intentRange(intent).start
   emit('seek', start)
@@ -526,7 +548,7 @@ function beatLabel(type: string): string {
               :key="b.id"
               type="button"
               class="stl-block beat"
-              :class="{ selected: selectedId === b.id }"
+              :class="{ selected: selectedClip === clipKey(b.id) }"
               :style="{
                 left: left(b.timeRange.start),
                 width: width(b.timeRange.start, b.timeRange.end)
@@ -552,7 +574,7 @@ function beatLabel(type: string): string {
               :key="ent.id + i"
               type="button"
               class="stl-block entity"
-              :class="{ selected: selectedId === ent.id, soft: !ent.pixelEditable }"
+              :class="{ selected: selectedClip === clipKey(ent.id, i), soft: !ent.pixelEditable }"
               :style="{ left: left(ap.range.start), width: width(ap.range.start, ap.range.end) }"
               :title="`${ent.name} · ${ap.range.start.toFixed(2)}–${ap.range.end.toFixed(2)}s`"
               @click="selectEntity(ent, i)"
@@ -576,13 +598,13 @@ function beatLabel(type: string): string {
               :key="intent.id + track.id"
               type="button"
               class="stl-block intent"
-              :class="{ selected: selectedId === intent.id }"
+              :class="{ selected: selectedClip === clipKey(intent.id, track.id) }"
               :style="{
                 left: left(intentRange(intent).start),
                 width: width(intentRange(intent).start, intentRange(intent).end)
               }"
               :title="intent.reason"
-              @click="selectIntent(intent)"
+              @click="selectIntent(intent, track.id)"
             >
               {{ intent.techniques.find((t) => t.track === track.id)?.action }}
             </button>
@@ -596,7 +618,7 @@ function beatLabel(type: string): string {
               :key="ev.id"
               type="button"
               class="stl-block event"
-              :class="{ selected: selectedId === ev.id }"
+              :class="{ selected: selectedClip === clipKey(ev.id) }"
               :style="{
                 left: left(ev.timeRange.start),
                 width: width(ev.timeRange.start, ev.timeRange.end)

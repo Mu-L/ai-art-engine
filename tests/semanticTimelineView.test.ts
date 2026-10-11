@@ -5,13 +5,15 @@ import {
   TRACKS_PANE_MIN_WIDTH,
   clampSeekSeconds,
   clampSidePaneWidth,
+  entityKindKey,
   resolveEvidenceRef,
   resolveSemanticTimelineViewTarget,
   resolveTriggerRange,
   semanticTimelineSummaryText,
   semanticTimelineTextFromRunState,
   sidePaneWidthFromPointer,
-  sourceAspectRatio
+  sourceAspectRatio,
+  trackLabelKey
 } from '../src/renderer/src/features/graph/model/semanticTimelineView'
 import { semanticTimelineValue } from '../src/shared/graph/execute/semanticTimelineValue'
 import { SEMANTIC_TIMELINE_SCHEMA } from '../src/shared/semanticTimeline'
@@ -263,6 +265,34 @@ describe('semanticTimelineView', () => {
       detail: 'weird-id'
     })
     expect(resolveEvidenceRef('', {}).kind).toBe('unknown')
+  })
+
+  /**
+   * 轨道 id / 实体 kind 都是机器值，界面必须过一层本地化（手法列表曾直接露出 `camera`）。
+   */
+  it('trackLabelKey / entityKindKey：已知 id 有键，未知 id 返回 undefined（调用方原样显示）', () => {
+    expect(trackLabelKey('camera')).toBe('trackCamera')
+    expect(trackLabelKey('audio')).toBe('trackAudio')
+    expect(trackLabelKey('text')).toBe('trackText')
+    expect(trackLabelKey('vfx')).toBe('trackVfx')
+    // 意图手法里出现过的 id
+    expect(trackLabelKey('character')).toBe('trackCharacter')
+    expect(trackLabelKey('emotion')).toBe('trackEmotion')
+    expect(trackLabelKey('edit')).toBe('trackEdit')
+    // 层名复用；大小写与空格要容忍
+    expect(trackLabelKey('story')).toBe('layerStory')
+    expect(trackLabelKey('entity')).toBe('layerEntity')
+    expect(trackLabelKey(' Camera ')).toBe('trackCamera')
+    // 不认识的 id：交给调用方原样显示
+    expect(trackLabelKey('lighting')).toBeUndefined()
+    expect(trackLabelKey('')).toBeUndefined()
+
+    expect(entityKindKey('person')).toBe('entityKindPerson')
+    expect(entityKindKey('product')).toBe('entityKindProduct')
+    expect(entityKindKey('logo')).toBe('entityKindLogo')
+    expect(entityKindKey('PRODUCT')).toBe('entityKindProduct')
+    expect(entityKindKey('face')).toBeUndefined()
+    expect(entityKindKey('')).toBeUndefined()
   })
 
   it('非法 / 不相干的 JSON 不算时间线目标', () => {

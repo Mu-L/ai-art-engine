@@ -256,6 +256,23 @@ describe('SemanticTimelineEditor 轨道尺寸与字号', () => {
   })
 
   /**
+   * 界面里**不许**出现机器 id：轨道名（camera / character…）与实体 kind 都要本地化。
+   */
+  it('轨道名与实体 kind 走 i18n（不直接渲染 tech.track / item.kind）', () => {
+    // 两个映射函数必须真的从视图模型里 import 进来
+    expect(source).toMatch(
+      /import \{[\s\S]*?entityKindKey[\s\S]*?trackLabelKey[\s\S]*?\} from '\.\.\/features\/graph\/model\/semanticTimelineView'/
+    )
+    expect(source).toContain('trackLabel(tech.track)')
+    expect(source).toContain('entityKindLabel(selectedEvidence.item.kind)')
+    // 直接渲染机器值的写法必须消失
+    expect(source).not.toContain('{{ tech.track }}')
+    expect(source).not.toContain('{{ selectedEvidence.item.kind }}')
+    // 生产轨道列表也要通过映射（单一来源）
+    expect(source).toContain("{ id: 'camera', label: trackLabel('camera') }")
+  })
+
+  /**
    * 证据面板必须显示**人读标签**，不能把哈希 id 直接摆出来（`ev.c732c3a6d0` 没人看得懂）。
    */
   it('证据引用渲染成可读标签（可点跳播放条，原始 id 在 tooltip）', () => {

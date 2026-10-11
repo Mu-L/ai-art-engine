@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { BUILTIN_VOCABULARIES } from '../src/shared/semanticTimeline'
+import { trackLabelKey } from '../src/renderer/src/features/graph/model/semanticTimelineView'
 import enUS from '../src/renderer/src/i18n/locales/en-US'
 import zhCN from '../src/renderer/src/i18n/locales/zh-CN'
 
@@ -50,8 +51,19 @@ describe('SemanticTimelineEditor 国际化', () => {
   })
 
   it('制作层四个轨道名来自 i18n（camera/audio/text/vfx 只在代码里做 id）', () => {
+    /**
+     * 现在四个轨道名统一经 `trackLabel()`（内部查 `trackLabelKey` → t()），
+     * 手法列表也用同一个映射 —— 断言改成盯住这条唯一来源，
+     * 同时仍然要求组件里不出现把四个 id 硬编码当文案用的写法。
+     */
+    expect(source).toContain('function trackLabel(')
+    expect(source).toMatch(/\$\{key\}`\)/)
     for (const key of ['trackCamera', 'trackAudio', 'trackText', 'trackVfx']) {
-      expect(source).toContain(`t('graph.semanticTimeline.${key}')`)
+      expect(trackLabelKey(key.replace('track', '').toLowerCase()), `${key} 映射缺失`).toBe(key)
+    }
+    // 四个轨道列表项都走映射（而不是各自 t() 一遍，避免两处来源漂移）
+    for (const id of ['camera', 'audio', 'text', 'vfx']) {
+      expect(source).toContain(`{ id: '${id}', label: trackLabel('${id}') }`)
     }
     expect(source).not.toContain("['camera', 'audio', 'text', 'vfx']")
   })

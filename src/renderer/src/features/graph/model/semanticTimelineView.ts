@@ -206,6 +206,61 @@ export function resolveEvidenceRef(raw: string, ctx: EvidenceRefContext = {}): R
   return { raw: id, kind: 'unknown', detail: id }
 }
 
+/**
+ * 轨道 id → i18n 键后缀。
+ *
+ * 文档里的 track 是**机器 id**（camera / character / audio / text / vfx / emotion / edit…），
+ * 直接显示就会在中文界面里露出英文（手法列表里踩到过）。返回 undefined 表示不认识的 id ——
+ * 调用方应原样显示（别把信息丢了）。
+ */
+export function trackLabelKey(track: string): string | undefined {
+  switch (track?.trim().toLowerCase()) {
+    case 'camera':
+      return 'trackCamera'
+    case 'audio':
+      return 'trackAudio'
+    case 'text':
+      return 'trackText'
+    case 'vfx':
+      return 'trackVfx'
+    case 'character':
+      return 'trackCharacter'
+    case 'emotion':
+      return 'trackEmotion'
+    case 'edit':
+      return 'trackEdit'
+    // 层名复用（story / entity 既是轨道 id 也是层标题）
+    case 'story':
+      return 'layerStory'
+    case 'entity':
+      return 'layerEntity'
+    default:
+      return undefined
+  }
+}
+
+/** 实体 kind → i18n 键后缀（同样是机器值：person / product / …） */
+export function entityKindKey(kind: string): string | undefined {
+  switch (kind?.trim().toLowerCase()) {
+    case 'person':
+      return 'entityKindPerson'
+    case 'product':
+      return 'entityKindProduct'
+    case 'object':
+      return 'entityKindObject'
+    case 'text':
+      return 'entityKindText'
+    case 'logo':
+      return 'entityKindLogo'
+    case 'background':
+      return 'entityKindBackground'
+    case 'voice':
+      return 'entityKindVoice'
+    default:
+      return undefined
+  }
+}
+
 /** 右栏（视频+证据）可调宽度的边界 */
 export const SIDE_PANE_MIN_WIDTH = 320
 export const SIDE_PANE_MAX_WIDTH = 900

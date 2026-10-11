@@ -24,10 +24,12 @@ import { useStudioI18n } from '../composables/useStudioI18n'
 import {
   clampSeekSeconds,
   clampSidePaneWidth,
+  entityKindKey,
   resolveEvidenceRef,
   resolveTriggerRange,
   sidePaneWidthFromPointer,
   sourceAspectRatio,
+  trackLabelKey,
   type ResolvedEvidenceRef
 } from '../features/graph/model/semanticTimelineView'
 import { useProjectStore } from '../stores/project'
@@ -328,12 +330,27 @@ function intentsForTrack(track: string): DirectorIntent[] {
   return intents.value.filter((i) => i.techniques.some((t) => t.track === track))
 }
 
+/**
+ * 轨道 id / 实体 kind → 显示名。
+ *
+ * 手法列表里以前直接显示 `tech.track`，中文界面就露出 `camera`、`character`（用户反馈）。
+ * 不认识的 id 原样显示 —— 宁可露出英文，也不要显示空白。
+ */
+function trackLabel(track: string): string {
+  const key = trackLabelKey(track)
+  return key ? t(`graph.semanticTimeline.${key}`) : track
+}
+function entityKindLabel(kind: string): string {
+  const key = entityKindKey(kind)
+  return key ? t(`graph.semanticTimeline.${key}`) : kind
+}
+
 /** 制作层四个轨道（id 用于匹配 intent.techniques[].track，label 是界面文案） */
 const productionTracks = computed(() => [
-  { id: 'camera', label: t('graph.semanticTimeline.trackCamera') },
-  { id: 'audio', label: t('graph.semanticTimeline.trackAudio') },
-  { id: 'text', label: t('graph.semanticTimeline.trackText') },
-  { id: 'vfx', label: t('graph.semanticTimeline.trackVfx') }
+  { id: 'camera', label: trackLabel('camera') },
+  { id: 'audio', label: trackLabel('audio') },
+  { id: 'text', label: trackLabel('text') },
+  { id: 'vfx', label: trackLabel('vfx') }
 ])
 
 /** 制作层片段的落点：由 intent.trigger 指向的事件决定（找不到给 0–1 兜底） */
@@ -674,7 +691,7 @@ function beatLabel(type: string): string {
         <p class="muted">{{ t('graph.semanticTimeline.techniques') }}</p>
         <p>
           <span v-for="tech in selectedEvidence.item.techniques" :key="tech.track + tech.action">
-            {{ tech.track }} · {{ tech.action }}<br />
+            {{ trackLabel(tech.track) }} · {{ tech.action }}<br />
           </span>
         </p>
         <p v-if="selectedEvidence.item.reason" class="muted">
@@ -687,7 +704,9 @@ function beatLabel(type: string): string {
       </template>
       <template v-else>
         <p>
-          <strong>{{ selectedEvidence.item.name }}</strong> ({{ selectedEvidence.item.kind }})
+          <strong>{{ selectedEvidence.item.name }}</strong> ({{
+            entityKindLabel(selectedEvidence.item.kind)
+          }})
         </p>
         <p class="muted">
           {{ t('graph.semanticTimeline.pixelEditable') }}:

@@ -313,6 +313,26 @@ describe('语义时间线值类型', () => {
     expect(vlm).toContain('modelProviderFacade.generateText')
   })
 
+  /**
+   * 实体检出 0 个时也必须落盘 + 明确提示。
+   *
+   * 实测踩到：旧代码只在 `length > 0` 时 `saveEntities`，于是 0 个时
+   * `evidence/entities.json` 留下**上一次的 16 个实体**，而时间线文档里是 0 ——
+   * 界面上「角色 / 实体」轨道空着、磁盘上却有数据，排查极易被带偏。
+   */
+  it('实体检出 0 个也要覆盖落盘并给出提示（不留旧快照）', () => {
+    const service = readFileSync(
+      join(process.cwd(), 'src/main/services/semanticTimeline/SemanticTimelineService.ts'),
+      'utf8'
+    )
+    // 不再有「只在 > 0 时才采纳」的分支
+    expect(service).not.toContain('if (det.entities.length > 0) {')
+    // 无条件采纳 + 无条件落盘
+    expect(service).toMatch(/entities = det\.entities\s*\n\s*saveEntities\(/)
+    // 0 个时要有可诊断的提示（否则用户只看到轨道空着，不知道为什么）
+    expect(service).toMatch(/det\.entities\.length === 0[\s\S]{0,240}?returned 0 entities/)
+  })
+
   it('语义分析节点（有分析能力）产出结构化值，并把 timelineId 写回参数', async () => {
     const doc = makeDoc('stl.abc12345')
     const analyzeSemanticVideo = vi.fn(async () => ({

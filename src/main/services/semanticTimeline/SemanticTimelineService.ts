@@ -296,12 +296,22 @@ export async function analyzeSemanticTimeline(
         providerInstanceId: options.entityProviderInstanceId
       })
       notes.push(...det.notes)
-      if (det.entities.length > 0) {
-        entities = det.entities
-        saveEntities(projectRoot, doc.id, {
-          schema: SEMANTIC_TIMELINE_SCHEMA,
-          entities
-        })
+      /**
+       * **无论检出多少都采纳并落盘**。
+       *
+       * 以前只在 `length > 0` 时写：结果为 0 时 `evidence/entities.json` 会留下**上一次的旧数据**，
+       * 于是磁盘上看着有 16 个实体、时间线文档里却是 0（界面上角色/实体轨道空着）——
+       * 排查时极易被这份陈旧文件带偏（实测踩到）。
+       */
+      entities = det.entities
+      saveEntities(projectRoot, doc.id, {
+        schema: SEMANTIC_TIMELINE_SCHEMA,
+        entities
+      })
+      if (det.entities.length === 0) {
+        notes.push(
+          'entity detect: vision model returned 0 entities (check the model / keyframes / vision capability)'
+        )
       }
     } catch (e) {
       notes.push(`entity detect: ${e instanceof Error ? e.message : String(e)}`)

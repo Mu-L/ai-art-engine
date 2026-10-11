@@ -5,6 +5,7 @@ import {
   TRACKS_PANE_MIN_WIDTH,
   clampSeekSeconds,
   clampSidePaneWidth,
+  resolveEvidenceRef,
   resolveSemanticTimelineViewTarget,
   resolveTriggerRange,
   semanticTimelineSummaryText,
@@ -202,6 +203,66 @@ describe('semanticTimelineView', () => {
     expect(sourceAspectRatio({ width: 0, height: 1920 })).toBeUndefined()
     expect(sourceAspectRatio({ width: -10, height: 20 })).toBeUndefined()
     expect(sourceAspectRatio({ width: Number.NaN, height: 1080 })).toBeUndefined()
+  })
+
+  /**
+   * 证据 id 可读化：`ev.c732c3a6d0` 这种哈希直接摆在面板上没人看得懂。
+   */
+  it('resolveEvidenceRef：查得到就查，查不到从 id 自身解析，绝不低于原始信息', () => {
+    const ctx = {
+      events: [
+        { id: 'ev.c732c3a6d0', label: 'price_announce', timeRange: { start: 19.32, end: 22.5 } }
+      ],
+      beats: [{ id: 'beat.aaaa1111', type: 'hook', timeRange: { start: 0, end: 3 } }],
+      intents: [{ id: 'intent.bbbb2222', goal: 'emphasize' }],
+      entities: [{ id: 'ent.person.host', name: '主播' }],
+      fps: 30,
+      utterances: new Map([
+        ['utt.007.49529d7876', { text: '通勤天天用的好东西', start: 0.38, end: 6.02 }]
+      ]),
+      shots: new Map([['shot.009.875', { start: 29.17, end: 31.2 }]])
+    }
+    // 事件：取 label + 时间
+    expect(resolveEvidenceRef('ev.c732c3a6d0', ctx)).toEqual({
+      raw: 'ev.c732c3a6d0',
+      kind: 'event',
+      detail: 'price_announce',
+      startSec: 19.32,
+      endSec: 22.5
+    })
+    // 话语：有原句就显示原句（长句截断）+ 时间
+    const utt = resolveEvidenceRef('utt.007.49529d7876', ctx)
+    expect(utt.kind).toBe('utterance')
+    expect(utt.detail).toBe('通勤天天用的好东西')
+    expect(utt.startSec).toBe(0.38)
+    // 镜头：证据文件里有范围就用文件，序号来自 id
+    expect(resolveEvidenceRef('shot.009.875', ctx)).toMatchObject({
+      kind: 'shot',
+      detail: '9',
+      startSec: 29.17
+    })
+    // 实体 / 节拍 / 意图
+    expect(resolveEvidenceRef('ent.person.host', ctx).detail).toBe('主播')
+    expect(resolveEvidenceRef('beat.aaaa1111', ctx)).toMatchObject({ kind: 'beat', detail: 'hook' })
+    expect(resolveEvidenceRef('intent.bbbb2222', ctx).detail).toBe('emphasize')
+  })
+
+  it('resolveEvidenceRef：没有证据文件时也能从 id 给出序号/时间，未知 id 退回原文', () => {
+    // 空上下文：镜头时间可由「起始帧 / fps」算出
+    const shot = resolveEvidenceRef('shot.009.875', { fps: 30 })
+    expect(shot).toMatchObject({ kind: 'shot', detail: '9', startSec: 875 / 30 })
+    // 话语至少给出序号（拿不到原句）
+    expect(resolveEvidenceRef('utt.007.49529d7876', {}).detail).toBe('7')
+    expect(resolveEvidenceRef('ocr.003.abcdef1234', {}).detail).toBe('3')
+    // 事件查不到实体时给 hash 前缀，而不是「未知」
+    expect(resolveEvidenceRef('ev.c732c3a6d0', {}).detail).toBe('c732c3')
+    // 不认识的 id / 空串：原样保留，别把信息丢了
+    expect(resolveEvidenceRef('weird-id', {})).toEqual({
+      raw: 'weird-id',
+      kind: 'unknown',
+      detail: 'weird-id'
+    })
+    expect(resolveEvidenceRef('', {}).kind).toBe('unknown')
   })
 
   it('非法 / 不相干的 JSON 不算时间线目标', () => {

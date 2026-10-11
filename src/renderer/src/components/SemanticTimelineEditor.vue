@@ -24,9 +24,11 @@ import { useStudioI18n } from '../composables/useStudioI18n'
 import {
   clampSeekSeconds,
   clampSidePaneWidth,
+  resolveEvidenceRef,
   resolveTriggerRange,
   sidePaneWidthFromPointer,
-  sourceAspectRatio
+  sourceAspectRatio,
+  type ResolvedEvidenceRef
 } from '../features/graph/model/semanticTimelineView'
 import { useProjectStore } from '../stores/project'
 
@@ -147,6 +149,98 @@ function width(start: number, end: number): string {
   return `${Math.max(4, (end - start) * px.value)}px`
 }
 
+/**
+ * 证据 id 的**可读化**：`ev.c732c3a6d0` → 「事件 · 价格公布 · 19.32–22.50s」。
+ *
+ * 事件/节拍/意图/实体 在时间线文档里能查到名字；镜头/话语只能从 id 与证据文件解析
+ * （`evidence/utterances.json`、`evidence/shots.json`，best-effort 读取）。
+ * 原始 id 保留在 tooltip 里，排查时仍能看到。
+ */
+const utteranceIndex = ref(new Map<string, { text?: string; start?: number; end?: number }>())
+const shotIndex = ref(new Map<string, { start?: number; end?: number }>())
+
+async function loadEvidenceIndex(): Promise<void> {
+  const id = props.timeline.id?.trim()
+  const utterancesRel = props.timeline.evidence?.utterancesPath?.trim()
+  const shotsRel = props.timeline.evidence?.shotsPath?.trim()
+  if (!id || (!utterancesRel && !shotsRel)) return
+  const readJson = async (rel: string): Promise<unknown> => {
+    try {
+      const text = await window.studio.readProjectFile(`Semantic/${id}/${rel}`)
+      return text?.trim() ? JSON.parse(text) : null
+    } catch {
+      return null
+    }
+  }
+  if (utterancesRel) {
+    const doc = (await readJson(utterancesRel)) as {
+      utterances?: Array<{
+        id?: string
+        text?: string
+        timeRange?: { start?: number; end?: number }
+      }>
+    } | null
+    const map = new Map<string, { text?: string; start?: number; end?: number }>()
+    for (const u of doc?.utterances ?? []) {
+      if (u?.id) map.set(u.id, { text: u.text, start: u.timeRange?.start, end: u.timeRange?.end })
+    }
+    utteranceIndex.value = map
+  }
+  if (shotsRel) {
+    const doc = (await readJson(shotsRel)) as {
+      shots?: Array<{ id?: string; timeRange?: { start?: number; end?: number } }>
+    } | null
+    const map = new Map<string, { start?: number; end?: number }>()
+    for (const s of doc?.shots ?? []) {
+      if (s?.id) map.set(s.id, { start: s.timeRange?.start, end: s.timeRange?.end })
+    }
+    shotIndex.value = map
+  }
+}
+
+const REF_KIND_KEY: Record<string, string> = {
+  event: 'refEvent',
+  beat: 'refBeat',
+  intent: 'refIntent',
+  entity: 'refEntity',
+  shot: 'refShot',
+  utterance: 'refUtterance',
+  ocr: 'refOcr'
+}
+
+function resolveRefs(refs: readonly string[]): ResolvedEvidenceRef[] {
+  return (refs ?? []).map((raw) =>
+    resolveEvidenceRef(raw, {
+      events: events.value,
+      beats: beats.value,
+      intents: intents.value,
+      entities: entities.value,
+      utterances: utteranceIndex.value,
+      shots: shotIndex.value,
+      fps: props.timeline.source?.fps
+    })
+  )
+}
+
+function refKindLabel(kind: ResolvedEvidenceRef['kind']): string {
+  const key = REF_KIND_KEY[kind]
+  return key ? t(`graph.semanticTimeline.${key}`) : ''
+}
+
+/** 「19.32–22.50s」；未知时间给空串（那就只是个不可点的标签） */
+function refTimeLabel(ref: ResolvedEvidenceRef): string {
+  if (ref.startSec == null) return ''
+  const start = ref.startSec.toFixed(2)
+  if (ref.endSec == null) return `${start}s`
+  return `${start}–${ref.endSec.toFixed(2)}s`
+}
+
+function seekToRef(ref: ResolvedEvidenceRef): void {
+  if (ref.startSec == null) return
+  emit('seek', ref.startSec)
+  seekVideo(ref.startSec)
+}
+
 function selectBeat(b: StoryBeat): void {
   selectedId.value = b.id
   emit('selectBeat', b.id)
@@ -206,6 +300,19 @@ watch(
   () => [props.timeline.source?.assetId, project.assets.length],
   () => {
     void resolveSourceVideoUrl()
+  },
+  { immediate: true }
+)
+
+// 证据文件只用于**把 id 显示成人话**（原句 / 镜头时间）；读不到也不影响其它功能
+watch(
+  () => [
+    props.timeline.id,
+    props.timeline.evidence?.utterancesPath,
+    props.timeline.evidence?.shotsPath
+  ],
+  () => {
+    void loadEvidenceIndex()
   },
   { immediate: true }
 )
@@ -517,7 +624,22 @@ function beatLabel(type: string): string {
           <strong>{{ selectedEvidence.item.label }}</strong>
         </p>
         <p>{{ selectedEvidence.item.description }}</p>
-        <p class="muted">evidence: {{ selectedEvidence.item.evidence.join(', ') || '—' }}</p>
+        <div class="stl-refs">
+          <button
+            v-for="ref in resolveRefs(selectedEvidence.item.evidence)"
+            :key="ref.raw"
+            type="button"
+            class="stl-ref"
+            :class="`kind-${ref.kind}`"
+            :title="refTimeLabel(ref) ? `${ref.raw} · ${refTimeLabel(ref)}` : ref.raw"
+            :disabled="ref.startSec == null"
+            @click="seekToRef(ref)"
+          >
+            <span class="stl-ref-kind">{{ refKindLabel(ref.kind) }}</span
+            >{{ ref.detail }}
+            <span v-if="refTimeLabel(ref)" class="stl-ref-time">{{ refTimeLabel(ref) }}</span>
+          </button>
+        </div>
         <p class="muted">
           {{ selectedEvidence.item.timeRange.start.toFixed(2) }}s –
           {{ selectedEvidence.item.timeRange.end.toFixed(2) }}s
@@ -528,7 +650,22 @@ function beatLabel(type: string): string {
           <strong>{{ beatLabel(selectedEvidence.item.type) }}</strong>
         </p>
         <p>{{ selectedEvidence.item.description }}</p>
-        <p class="muted">events: {{ selectedEvidence.item.events.join(', ') || '—' }}</p>
+        <div class="stl-refs">
+          <button
+            v-for="ref in resolveRefs(selectedEvidence.item.events)"
+            :key="ref.raw"
+            type="button"
+            class="stl-ref"
+            :class="`kind-${ref.kind}`"
+            :title="refTimeLabel(ref) ? `${ref.raw} · ${refTimeLabel(ref)}` : ref.raw"
+            :disabled="ref.startSec == null"
+            @click="seekToRef(ref)"
+          >
+            <span class="stl-ref-kind">{{ refKindLabel(ref.kind) }}</span
+            >{{ ref.detail }}
+            <span v-if="refTimeLabel(ref)" class="stl-ref-time">{{ refTimeLabel(ref) }}</span>
+          </button>
+        </div>
       </template>
       <template v-else-if="selectedEvidence.kind === 'intent'">
         <p>
@@ -872,6 +1009,50 @@ function beatLabel(type: string): string {
   height: auto;
   object-fit: contain;
   background: #000;
+}
+/* 证据引用：可读标签（点击跳播放条），原始 id 在 tooltip 里 */
+.stl-refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0;
+}
+.stl-ref {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.5;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stl-ref:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+.stl-ref:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+.stl-ref-kind {
+  flex: 0 0 auto;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.stl-ref-time {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 .stl-inspector .muted {
   color: var(--text-muted);

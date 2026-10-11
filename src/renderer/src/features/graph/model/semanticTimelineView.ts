@@ -76,6 +76,136 @@ export function sourceAspectRatio(source: { width?: number; height?: number }): 
   return `${w} / ${h}`
 }
 
+export type EvidenceRefKind =
+  'event' | 'beat' | 'intent' | 'entity' | 'shot' | 'utterance' | 'ocr' | 'unknown'
+
+export interface ResolvedEvidenceRef {
+  /** 原始 id（放进 tooltip 供排查） */
+  raw: string
+  kind: EvidenceRefKind
+  /** 人读的短标签（不含类型前缀）：事件 label / 实体名 / 镜头序号… */
+  detail: string
+  /** 已知时间（给了就能点着跳播放条） */
+  startSec?: number
+  endSec?: number
+}
+
+export interface EvidenceRefContext {
+  events?: ReadonlyArray<{
+    id: string
+    label?: string
+    timeRange?: { start: number; end: number }
+  }>
+  beats?: ReadonlyArray<{ id: string; type?: string; timeRange?: { start: number; end: number } }>
+  intents?: ReadonlyArray<{ id: string; goal?: string }>
+  entities?: ReadonlyArray<{ id: string; name?: string }>
+  /** 话语证据（来自 `evidence/utterances.json`，用于显示原句与时间） */
+  utterances?: ReadonlyMap<string, { text?: string; start?: number; end?: number }>
+  /** 镜头证据（来自 `evidence/shots.json`） */
+  shots?: ReadonlyMap<string, { start?: number; end?: number }>
+  fps?: number
+}
+
+function timeOf(range?: { start: number; end: number }): { startSec?: number; endSec?: number } {
+  if (!range) return {}
+  return {
+    ...(Number.isFinite(range.start) ? { startSec: range.start } : {}),
+    ...(Number.isFinite(range.end) ? { endSec: range.end } : {})
+  }
+}
+
+/**
+ * 证据 id → 人读标签。
+ *
+ * 这些 id 是内容哈希（`ev.c732c3a6d0` / `utt.007.49529d7876`），直接摆在面板上没人看得懂。
+ * 能在时间线文档里查到就查（事件 / 节拍 / 意图 / 实体）；查不到就**从 id 自身解析**：
+ * `shot.<序号>.<起始帧>` 能算出镜头号与时间，`utt.<序号>.<hash>` 至少给出序号。
+ * 全都解析不出来时退回原始 id（绝不显示"未知"把信息丢掉）。
+ */
+export function resolveEvidenceRef(raw: string, ctx: EvidenceRefContext = {}): ResolvedEvidenceRef {
+  const id = raw?.trim() ?? ''
+  const fps = Number(ctx.fps) > 0 ? Number(ctx.fps) : 30
+  if (!id) return { raw: id, kind: 'unknown', detail: '' }
+
+  if (id.startsWith('ev.')) {
+    const hit = ctx.events?.find((e) => e.id === id)
+    return {
+      raw: id,
+      kind: 'event',
+      detail: hit?.label?.trim() || id.slice(3, 9),
+      ...timeOf(hit?.timeRange)
+    }
+  }
+  if (id.startsWith('beat.')) {
+    const hit = ctx.beats?.find((b) => b.id === id)
+    return {
+      raw: id,
+      kind: 'beat',
+      detail: hit?.type?.trim() || id.slice(5, 11),
+      ...timeOf(hit?.timeRange)
+    }
+  }
+  if (id.startsWith('intent.')) {
+    const hit = ctx.intents?.find((i) => i.id === id)
+    return { raw: id, kind: 'intent', detail: hit?.goal?.trim() || id.slice(7, 13) }
+  }
+  if (id.startsWith('ent.')) {
+    const hit = ctx.entities?.find((e) => e.id === id)
+    return {
+      raw: id,
+      kind: 'entity',
+      detail: hit?.name?.trim() || id.split('.').slice(2).join('.')
+    }
+  }
+  if (id.startsWith('shot.')) {
+    // shot.<序号>.<起始帧> —— 只有 3 段，别多解构一层（否则序号取到帧号）
+    const [, index, frame] = id.split('.')
+    const score = Number(index)
+    const frameNo = Number(frame)
+    const fromFrame =
+      Number.isFinite(frameNo) && Number.isFinite(fps) ? Math.max(0, frameNo / fps) : undefined
+    const hit = ctx.shots?.get(id)
+    const start = Number.isFinite(hit?.start) ? Number(hit?.start) : fromFrame
+    const end = Number.isFinite(hit?.end) ? Number(hit?.end) : undefined
+    return {
+      raw: id,
+      kind: 'shot',
+      detail: Number.isFinite(score) ? String(score) : id.slice(5),
+      ...(start != null ? { startSec: start } : {}),
+      ...(end != null ? { endSec: end } : {})
+    }
+  }
+  if (id.startsWith('utt.')) {
+    const [, index] = id.split('.')
+    const hit = ctx.utterances?.get(id)
+    const score = Number(index)
+    const text = hit?.text?.trim()
+    return {
+      raw: id,
+      kind: 'utterance',
+      detail: text
+        ? text.length > 24
+          ? `${text.slice(0, 24)}…`
+          : text
+        : Number.isFinite(score)
+          ? String(score)
+          : id.slice(4, 10),
+      ...(Number.isFinite(hit?.start) ? { startSec: Number(hit?.start) } : {}),
+      ...(Number.isFinite(hit?.end) ? { endSec: Number(hit?.end) } : {})
+    }
+  }
+  if (id.startsWith('ocr.')) {
+    const [, index] = id.split('.')
+    const score = Number(index)
+    return {
+      raw: id,
+      kind: 'ocr',
+      detail: Number.isFinite(score) ? String(score) : id.slice(4, 10)
+    }
+  }
+  return { raw: id, kind: 'unknown', detail: id }
+}
+
 /** 右栏（视频+证据）可调宽度的边界 */
 export const SIDE_PANE_MIN_WIDTH = 320
 export const SIDE_PANE_MAX_WIDTH = 900

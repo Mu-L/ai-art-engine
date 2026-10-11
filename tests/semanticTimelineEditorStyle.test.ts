@@ -256,6 +256,32 @@ describe('SemanticTimelineEditor 轨道尺寸与字号', () => {
   })
 
   /**
+   * 证据面板必须显示**人读标签**，不能把哈希 id 直接摆出来（`ev.c732c3a6d0` 没人看得懂）。
+   */
+  it('证据引用渲染成可读标签（可点跳播放条，原始 id 在 tooltip）', () => {
+    expect(source).toContain('resolveEvidenceRef(')
+    expect(source).toContain('class="stl-ref"')
+    expect(source).toContain('refKindLabel(')
+    /**
+     * 两个分支（事件 / 节拍）都要绑：`toContain` 只看"字符串存在"，
+     * 只留一个分支也会通过（实测：删掉一处断言照过）—— 所以数出现次数。
+     */
+    expect((source.match(/@click="seekToRef\(ref\)"/g) ?? []).length).toBe(2)
+    expect(source).toContain('resolveRefs(selectedEvidence.item.evidence)')
+    expect(source).toContain('resolveRefs(selectedEvidence.item.events)')
+    // 原始 id 仍要看得到（排查用）
+    expect(source).toContain(':title="refTimeLabel(ref) ? `${ref.raw}')
+    // 旧的「裸 join」写法必须消失
+    expect(source).not.toContain('evidence: {{')
+    expect(source).not.toContain('item.evidence.join(')
+    expect(source).not.toContain('item.events.join(')
+    // 原句/镜头时间来自证据文件（best-effort）—— 断言**调用**而不是函数定义
+    expect(source).toMatch(/void loadEvidenceIndex\(\)/)
+    expect(source).toContain('utterancesPath')
+    expect(source).toContain('shotsPath')
+  })
+
+  /**
    * 缩放条的符号按钮（− / + / ⟲）必须**正中心**：
    * 按钮默认带浏览器内边距、且不是 flex，不重置就会偏（实测踩到）。
    */

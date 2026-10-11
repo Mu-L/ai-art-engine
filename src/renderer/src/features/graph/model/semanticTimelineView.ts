@@ -61,6 +61,21 @@ export function resolveSemanticTimelineViewTarget(
   return id.startsWith('stl.') ? { id } : null
 }
 
+/**
+ * 原视频的显示比例（CSS `aspect-ratio` 值）。
+ *
+ * `<video width:100% height:auto>` 在加载元数据后会按**实际比例**自适应，
+ * 但元数据到位前盒子是 0 高 → 布局会跳一下。用时间线里记的 `source.width/height`
+ * 先把比例占住（竖屏 9:16 / 横屏 16:9 / 方形都能正确预留）。
+ * 取值非法时返回 undefined（交给浏览器用内在比例）。
+ */
+export function sourceAspectRatio(source: { width?: number; height?: number }): string | undefined {
+  const w = Number(source?.width)
+  const h = Number(source?.height)
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return undefined
+  return `${w} / ${h}`
+}
+
 /** 右栏（视频+证据）可调宽度的边界 */
 export const SIDE_PANE_MIN_WIDTH = 320
 export const SIDE_PANE_MAX_WIDTH = 900

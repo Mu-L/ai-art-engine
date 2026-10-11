@@ -167,10 +167,14 @@ describe('SemanticTimelineEditor 轨道尺寸与字号', () => {
     expect(sourceBox).not.toMatch(/position:\s*sticky/)
     const video = cssBlock('.stl-source-video')
     expect(video).toMatch(/width:\s*100%/)
-    expect(pxOf('.stl-source-video', 'height')).toBe(720)
-    // 矮窗口要收住（否则右栏内容比窗口高 → 整块溢出、左侧轨道区被撑出空白）
-    expect(video).toMatch(/max-height:\s*calc\(100% - \d+px\)/)
+    // 按素材实际比例自适应：height: auto，**不许**再写死高度或限高
+    expect(video).toMatch(/height:\s*auto/)
+    expect(video).not.toMatch(/height:\s*\d+px/)
+    expect(video).not.toMatch(/max-height/)
     expect(video).toMatch(/object-fit:\s*contain/)
+    // 元数据到位前用时间线里的 source 宽高占位（避免从 0 高跳一下）
+    expect(source).toContain('sourceAspectRatio(')
+    expect(source).toContain(':style="sourceAspect ? { aspectRatio: sourceAspect } : undefined"')
   })
 
   /**

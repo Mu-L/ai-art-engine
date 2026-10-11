@@ -9,7 +9,8 @@ import {
   resolveTriggerRange,
   semanticTimelineSummaryText,
   semanticTimelineTextFromRunState,
-  sidePaneWidthFromPointer
+  sidePaneWidthFromPointer,
+  sourceAspectRatio
 } from '../src/renderer/src/features/graph/model/semanticTimelineView'
 import { semanticTimelineValue } from '../src/shared/graph/execute/semanticTimelineValue'
 import { SEMANTIC_TIMELINE_SCHEMA } from '../src/shared/semanticTimeline'
@@ -186,6 +187,21 @@ describe('semanticTimelineView', () => {
     expect(sidePaneWidthFromPointer({ clientX: 0, editorRight: 1600, editorWidth: 1600 })).toBe(
       SIDE_PANE_MAX_WIDTH
     )
+  })
+
+  /**
+   * 视频按素材实际比例自适应：元数据到位前用时间线记的宽高占位。
+   */
+  it('sourceAspectRatio：竖屏/横屏/方形都给出正确比例，非法值交给浏览器', () => {
+    expect(sourceAspectRatio({ width: 1080, height: 1920 })).toBe('1080 / 1920')
+    expect(sourceAspectRatio({ width: 1920, height: 1080 })).toBe('1920 / 1080')
+    expect(sourceAspectRatio({ width: 720, height: 720 })).toBe('720 / 720')
+    // 缺失 / 0 / 负数 / NaN → undefined（让浏览器用内在比例，别写出 0/0 这种无效声明）
+    expect(sourceAspectRatio({})).toBeUndefined()
+    expect(sourceAspectRatio({ width: 1080 })).toBeUndefined()
+    expect(sourceAspectRatio({ width: 0, height: 1920 })).toBeUndefined()
+    expect(sourceAspectRatio({ width: -10, height: 20 })).toBeUndefined()
+    expect(sourceAspectRatio({ width: Number.NaN, height: 1080 })).toBeUndefined()
   })
 
   it('非法 / 不相干的 JSON 不算时间线目标', () => {

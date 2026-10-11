@@ -25,7 +25,8 @@ import {
   clampSeekSeconds,
   clampSidePaneWidth,
   resolveTriggerRange,
-  sidePaneWidthFromPointer
+  sidePaneWidthFromPointer,
+  sourceAspectRatio
 } from '../features/graph/model/semanticTimelineView'
 import { useProjectStore } from '../stores/project'
 
@@ -184,6 +185,9 @@ function sourceRelativePath(): string {
   if (assetId.startsWith('path:')) return assetId.slice('path:'.length).trim()
   return project.assets.find((a) => a.id === assetId)?.relativePath?.trim() ?? ''
 }
+
+/** 元数据到位前先按时间线记的宽高占位，避免视频盒子从 0 高跳一下 */
+const sourceAspect = computed(() => sourceAspectRatio(props.timeline.source ?? {}))
 
 async function resolveSourceVideoUrl(): Promise<void> {
   const rel = sourceRelativePath()
@@ -498,6 +502,7 @@ function beatLabel(type: string): string {
           ref="videoRef"
           class="stl-source-video"
           :src="sourceVideoUrl"
+          :style="sourceAspect ? { aspectRatio: sourceAspect } : undefined"
           controls
           playsinline
           preload="metadata"
@@ -853,11 +858,11 @@ function beatLabel(type: string): string {
 .stl-source-video {
   display: block;
   width: 100%;
-  /* 目标高度 720：竖屏（9:16）画面正好铺满高度；横屏按 contain 上下留黑边。
-     但要**适配窗口**：矮窗口下用 max-height 收住（给下面的证据留 ~170px），
-     否则右栏内容比窗口高、整块溢出，左侧轨道区会被撑出一大片空白。 */
-  height: 720px;
-  max-height: calc(100% - 170px);
+  /* 按**素材实际比例**自适应：宽度吃满右栏，高度由视频自身宽高比决定
+     （竖屏 9:16 → 高约为宽的 1.78 倍；横屏 16:9 → 约 0.56 倍）。
+     不设 height / max-height：不做高度限制，画面该多高就多高，多出的部分由面板滚动。
+     `aspect-ratio` 由内联样式给（时间线里记的 source 宽高），避免元数据到位前跳版。 */
+  height: auto;
   object-fit: contain;
   background: #000;
 }
